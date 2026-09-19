@@ -63,8 +63,9 @@ jobs:
         run: swift run -q tools ci unit-tests --skip-previews
 
       - name: Save compilation cache
-        # Only the default branch populates the cache, all of the other runs simply read from it.
-        if: ${{ !cancelled() && github.event_name == 'push' && github.ref == 'refs/heads/familychat' }}
+        # Saved on every run (keyed by SHA, restored by prefix) so that repeated runs on a
+        # branch and merges into familychat only compile what has actually changed.
+        if: ${{ !cancelled() }}
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/Library/Developer/Xcode/CompilationCache.noindex
