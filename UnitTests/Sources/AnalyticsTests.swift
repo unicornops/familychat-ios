@@ -96,8 +96,8 @@ final class AnalyticsTests {
         // The analytics should be enabled
         #expect(appSettings.analyticsConsentState == .optedIn)
         #expect(analytics.isEnabled)
-        // Analytics client should have been started
-        #expect(analyticsClient.startAnalyticsConfigurationCalled)
+        // But the client can't start because Family Chat ships without an analytics configuration.
+        #expect(!analyticsClient.startAnalyticsConfigurationCalled)
     }
     
     @Test
@@ -114,10 +114,10 @@ final class AnalyticsTests {
     func analyticsStartIfEnabled() {
         // Given an existing install of the app where the user previously accepted the tracking
         appSettings.analyticsConsentState = .optedIn
-        // Analytics should start
+        // Analytics would start, but Family Chat ships without an analytics configuration.
         #expect(analytics.isEnabled)
         analytics.startIfEnabled()
-        #expect(analyticsClient.startAnalyticsConfigurationCalled)
+        #expect(!analyticsClient.startAnalyticsConfigurationCalled)
     }
     
     @Test

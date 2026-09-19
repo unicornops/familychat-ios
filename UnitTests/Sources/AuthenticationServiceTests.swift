@@ -75,7 +75,7 @@ struct AuthenticationServiceTests {
         }
         
         #expect(service.flow == .login)
-        #expect(service.homeserver.value == .init(address: "matrix.org", loginMode: .unknown))
+        #expect(service.homeserver.value == .init(address: "safechat.family", loginMode: .unknown))
     }
     
     @Test

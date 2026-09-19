@@ -104,19 +104,15 @@ final class BugReportServiceTests {
     @Test
     @MainActor
     func configurations() async throws {
-        guard case let .url(initialURL) = appSettings.bugReportRageshakeURL.publisher.value else {
-            Issue.record("Unexpected initial configuration.")
-            return
-        }
+        // Family Chat ships without a rageshake URL, so bug reporting starts out disabled
+        // and is only ever switched on by a remote setting.
+        #expect(appSettings.bugReportRageshakeURL.publisher.value == .disabled)
         
         let service = BugReportService(rageshakeURLPublisher: appSettings.bugReportRageshakeURL.publisher,
                                        applicationID: "mock_app_id",
                                        sdkGitSHA: "1234",
                                        session: .mock,
                                        appHooks: AppHooks())
-        #expect(service.isEnabled)
-        
-        appSettings.bugReportRageshakeURL.applyRemoteValue(.disabled)
         #expect(!service.isEnabled)
         
         appSettings.bugReportRageshakeURL.applyRemoteValue(.url("https://bugs.server.net/submit"))
@@ -136,12 +132,11 @@ final class BugReportServiceTests {
         
         #expect(customConfigurationResponse.reportURL == "https://bugs.server.net/123")
         
+        appSettings.bugReportRageshakeURL.applyRemoteValue(.disabled)
+        #expect(!service.isEnabled)
+        
         appSettings.bugReportRageshakeURL.reset()
-        #expect(service.isEnabled)
-        
-        let defaultConfigurationResponse = try await service.submitBugReport(bugReport, progressListener: progressSubject).get()
-        
-        #expect(defaultConfigurationResponse.reportURL == initialURL.absoluteString.replacingOccurrences(of: "submit", with: "123"))
+        #expect(!service.isEnabled)
     }
 }
 

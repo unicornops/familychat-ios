@@ -38,7 +38,7 @@ struct AppRouteURLParserTests {
         // Given an OAuth callback for a different app variant.
         let callbackURL = appSettings.oAuthRedirectURL
             .deletingLastPathComponent()
-            .appending(component: "family.safechat.appz")
+            .appending(component: "family.safechat.nightly")
             .appending(queryItems: [URLQueryItem(name: "state", value: "12345"),
                                     URLQueryItem(name: "code", value: "67890")])
         
