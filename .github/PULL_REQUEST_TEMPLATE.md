@@ -1,9 +1,8 @@
 ### Pull Request Checklist
 
-- [ ] I read the [contributing guide](https://github.com/element-hq/element-x-ios/blob/develop/CONTRIBUTING.md).
-- [ ] I am aware of the [etiquette](https://github.com/element-hq/element-x-ios/blob/develop/CONTRIBUTING.md#etiquette).
-- [ ] Pull request contains a [changelog label](https://github.com/element-hq/element-x-ios/blob/develop/CONTRIBUTING.md#changelog).
-- [ ] This PR has been made with the help of an LLM.
+- [ ] The title follows [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/) (e.g. `feat(brand): …`).
+- [ ] The change is as small as possible, so that merges from upstream Element X stay cheap.
+- [ ] Any change to `app.yml`, `project.yml` or a `target.yml` has been regenerated with `xcodegen`.
 
 **UI changes have been tested with:**
 - [ ] iPhone and iPad simulators in portrait and landscape orientations.

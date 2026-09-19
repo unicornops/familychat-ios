@@ -38,7 +38,7 @@ struct AppRouteURLParserTests {
         // Given an OAuth callback for a different app variant.
         let callbackURL = appSettings.oAuthRedirectURL
             .deletingLastPathComponent()
-            .appending(component: "io.element.elementz")
+            .appending(component: "family.safechat.appz")
             .appending(queryItems: [URLQueryItem(name: "state", value: "12345"),
                                     URLQueryItem(name: "code", value: "67890")])
         
@@ -72,7 +72,7 @@ struct AppRouteURLParserTests {
     @Test
     func webRoomIDURL() throws {
         let id = "!abcdefghijklmnopqrstuvwxyz1234567890:matrix.org"
-        let url = try #require(URL(string: "https://app.element.io/#/room/\(id)"))
+        let url = try #require(URL(string: "https://app.safechat.family/#/room/\(id)"))
         
         let route = appRouteURLParser.route(from: url)
         
@@ -82,7 +82,7 @@ struct AppRouteURLParserTests {
     @Test
     func webUserIDURL() throws {
         let id = "@alice:matrix.org"
-        let url = try #require(URL(string: "https://develop.element.io/#/user/\(id)"))
+        let url = try #require(URL(string: "https://app.safechat.family/#/user/\(id)"))
         
         let route = appRouteURLParser.route(from: url)
         

@@ -13,6 +13,10 @@ import Testing
 
 @MainActor
 final class AnalyticsTests {
+    /// Family Chat ships without a PostHog host or key, so `AppSettings.analyticsConfiguration`
+    /// is always `nil`. The client tests below use an explicit configuration instead.
+    private static let testConfiguration = AnalyticsConfiguration(host: "https://posthog.localhost", apiKey: "test_key")
+    
     private let appSettings: AppSettings
     private let analytics: AnalyticsServiceProtocol
     private let analyticsClient: AnalyticsClientMock
@@ -31,12 +35,12 @@ final class AnalyticsTests {
     
     @Test
     func analyticsPromptNewUser() {
-        // Given a fresh install of the app (without PostHog analytics having been set).
-        // When the user is prompted for analytics.
+        // Given a fresh install of the app.
+        // When the user would be prompted for analytics.
         let showPrompt = analytics.shouldShowAnalyticsPrompt
         
-        // Then the prompt should be shown.
-        #expect(showPrompt, "A prompt should be shown for a new user.")
+        // Then no prompt should be shown as Family Chat ships without analytics.
+        #expect(!showPrompt, "No prompt should be shown when analytics are disabled.")
     }
     
     @Test
@@ -172,7 +176,7 @@ final class AnalyticsTests {
         // Given a client with user properties set
         
         let client = PostHogAnalyticsClient(posthogFactory: MockPostHogFactory(mock: posthogMock))
-        try client.start(analyticsConfiguration: #require(appSettings.analyticsConfiguration))
+        client.start(analyticsConfiguration: Self.testConfiguration)
         
         client.updateUserProperties(AnalyticsEvent.UserProperties(URLPreviewsEnabled: nil,
                                                                   allChatsActiveFilter: nil,
@@ -215,16 +219,17 @@ final class AnalyticsTests {
         // When forgetting analytics consents
         analytics.resetConsentState()
         
-        // Then the analytics prompt should be presented again
+        // Then the consent state should be cleared. Family Chat ships without analytics,
+        // so the prompt still isn't shown.
         #expect(appSettings.analyticsConsentState == .unknown)
-        #expect(analytics.shouldShowAnalyticsPrompt)
+        #expect(!analytics.shouldShowAnalyticsPrompt)
     }
     
     @Test
     func sendingAndUpdatingSuperProperties() throws {
         // Given a client with user properties set
         let client = PostHogAnalyticsClient(posthogFactory: MockPostHogFactory(mock: posthogMock))
-        try client.start(analyticsConfiguration: #require(appSettings.analyticsConfiguration))
+        client.start(analyticsConfiguration: Self.testConfiguration)
         
         client.updateSuperProperties(AnalyticsEvent.SuperProperties(appPlatform: .EXI,
                                                                     cryptoSDK: .Rust,
@@ -305,7 +310,7 @@ final class AnalyticsTests {
         #expect(posthogMock.capturePropertiesUserPropertiesCalled == false)
         
         // start now
-        try client.start(analyticsConfiguration: #require(appSettings.analyticsConfiguration))
+        client.start(analyticsConfiguration: Self.testConfiguration)
         #expect(posthogMock.optInCalled == true)
         
         client.capture(someEvent)

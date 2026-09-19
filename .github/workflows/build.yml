@@ -1,0 +1,81 @@
+name: Build
+
+on:
+  workflow_dispatch:
+
+  push:
+    branches: [familychat]
+
+  pull_request:
+
+permissions: {}
+
+jobs:
+  build:
+    name: Build and test
+    runs-on: macos-26
+    timeout-minutes: 90
+
+    concurrency:
+      # Only allow a single run of this workflow on each branch, automatically cancelling older runs.
+      group: ${{ format('build-{0}', github.ref) }}
+      cancel-in-progress: true
+
+    steps:
+      - uses: nschloe/action-cached-lfs-checkout@385a8ecc719e50b8c71af6ab01a624b486b7c3bc # v1.2.5
+        with:
+          persist-credentials: false
+
+      - name: Setup environment
+        run: source ci_scripts/ci_common.sh && setup_github_actions_environment
+
+      - name: Restore compilation cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/Library/Developer/Xcode/CompilationCache.noindex
+          key: compilation-cache-build-${{ github.sha }}
+          restore-keys: compilation-cache-build-
+
+      - name: Generate the Xcode project
+        run: xcodegen
+
+      - name: Warn if the committed project is out of date
+        # Not fatal: the CI runner's XcodeGen version may differ slightly from a contributor's.
+        run: |
+          if ! git diff --quiet; then
+            echo "::warning title=Project out of date::Run 'xcodegen' locally and commit the regenerated project."
+            git diff --stat
+          fi
+
+      - name: Build the app unsigned for the simulator
+        run: |
+          set -o pipefail && xcodebuild build \
+            -scheme ElementX \
+            -destination 'platform=iOS Simulator,name=iPhone 17,OS=26.5' \
+            CODE_SIGNING_ALLOWED=NO \
+            COMPILATION_CACHE_ENABLE_CACHING=YES \
+            COMPILATION_CACHE_CAS_PATH=$HOME/Library/Developer/Xcode/CompilationCache.noindex \
+            | xcbeautify -q --disable-logging --is-ci --renderer github-actions
+
+      - name: Run unit tests
+        # Preview (snapshot) tests are skipped: the rebrand invalidates upstream's reference
+        # images. Add the `record-snapshots` label to a PR to re-record them.
+        run: swift run -q tools ci unit-tests --skip-previews
+
+      - name: Save compilation cache
+        # Only the default branch populates the cache, all of the other runs simply read from it.
+        if: ${{ !cancelled() && github.event_name == 'push' && github.ref == 'refs/heads/familychat' }}
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/Library/Developer/Xcode/CompilationCache.noindex
+          key: compilation-cache-build-${{ github.sha }}
+
+      - name: Archive artifacts
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        # We only care about artefacts if the tests fail
+        if: failure()
+        with:
+          name: Results
+          path: test_output/UnitTests.zip
+          retention-days: 1
+          if-no-files-found: ignore

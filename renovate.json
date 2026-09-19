@@ -4,9 +4,6 @@
     "config:recommended",
     ":semanticCommitsDisabled"
   ],
-  "labels" : [
-    "pr-misc"
-  ],
   "minimumReleaseAge": "7 days",
   "packageRules" : [
     {

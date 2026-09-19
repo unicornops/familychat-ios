@@ -23,6 +23,14 @@ struct LegalInformationScreen: View {
                 ListRow(label: .plain(title: L10n.commonPrivacyPolicy),
                         kind: .button { openURL(context.viewState.privacyURL) })
             }
+            
+            Section {
+                ListRow(label: .plain(title: UntranslatedL10n.screenAboutSourceCode),
+                        kind: .button { openURL(context.viewState.sourceCodeURL) })
+            } footer: {
+                Text(UntranslatedL10n.screenAboutSourceCodeNotice)
+                    .compoundListSectionFooter()
+            }
         }
         .compoundList()
         .navigationTitle(L10n.commonAbout)

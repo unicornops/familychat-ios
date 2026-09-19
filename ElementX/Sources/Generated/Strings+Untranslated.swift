@@ -10,6 +10,10 @@ import Foundation
 // swiftlint:disable explicit_type_interface function_parameter_count identifier_name line_length
 // swiftlint:disable nesting type_body_length type_name vertical_whitespace_opening_braces
 internal nonisolated enum UntranslatedL10n {
+  /// Source code
+  internal static var screenAboutSourceCode: String { return UntranslatedL10n.tr("Untranslated", "screen_about_source_code") }
+  /// Family Chat is a fork of Element X by Element (AGPL-3.0); source at https://github.com/unicornops/familychat-ios
+  internal static var screenAboutSourceCodeNotice: String { return UntranslatedL10n.tr("Untranslated", "screen_about_source_code_notice") }
   /// Search
   internal static var screenHomeTabSearch: String { return UntranslatedL10n.tr("Untranslated", "screen_home_tab_search") }
   /// Search for chats and messages

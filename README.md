@@ -1,54 +1,123 @@
-[![Element iOS Matrix room #element-x-ios:matrix.org](https://img.shields.io/matrix/element-x-ios:matrix.org.svg?label=%23element-x-ios:matrix.org&logo=matrix&server_fqdn=matrix.org)](https://matrix.to/#/#element-x-ios:matrix.org)
-![GitHub](https://img.shields.io/github/license/element-hq/element-x-ios)
+# Family Chat for iOS
 
-![Build Status](https://img.shields.io/github/actions/workflow/status/element-hq/element-x-ios/unit-tests.yml)
-![GitHub release (latest by date)](https://img.shields.io/github/v/release/element-hq/element-x-ios)
+![Build](https://github.com/unicornops/familychat-ios/actions/workflows/build.yml/badge.svg?branch=familychat)
+[![License: AGPL v3](https://img.shields.io/badge/license-AGPL--3.0-blue.svg)](LICENSE)
 
-[![codecov](https://codecov.io/gh/element-hq/element-x-ios/branch/develop/graph/badge.svg?token=AVIJB2MJU2)](https://codecov.io/gh/element-hq/element-x-ios)
+Family Chat is the iOS and iPadOS client for [Family Chat](https://safechat.family), a private
+[Matrix](https://matrix.org/) chat service for families. It is a fork of
+[Element X iOS](https://github.com/element-hq/element-x-ios) by Element, rebranded and configured for the
+Family Chat service, with Element's third-party services removed.
 
-# Element X iOS
+## Fork provenance
 
-Element X iOS is the next-generation [Matrix](https://matrix.org/) client provided by [Element](https://element.io/).
+| | |
+|---|---|
+| Upstream | [element-hq/element-x-ios](https://github.com/element-hq/element-x-ios) |
+| Forked from | tag `release/26.09.1` |
+| Default branch | `familychat` |
+| Licence | AGPL-3.0-only (see [Copyright & License](#copyright--license)) |
 
-Compared to the previous-generation [Element Classic](https://github.com/element-hq/element-ios), it is a total rewrite using the [Matrix Rust SDK](https://github.com/matrix-org/matrix-rust-sdk) underneath and targeting devices running iOS 18+.
+Element, Element X and the Element logo are trademarks of Element. Family Chat is not affiliated with,
+endorsed by, or supported by Element.
 
-## Rust SDK
+## What is different from upstream
 
-Element X leverages the [Matrix Rust SDK](https://github.com/matrix-org/matrix-rust-sdk) through an FFI layer exposed as a [swift package](https://github.com/matrix-org/matrix-rust-components-swift) that the final client can directly import and use. We're doing this as a way to share code between platforms, with [Element X Android](https://github.com/element-hq/element-x-android) using the same SDK.
+- Family Chat branding: app name, app icon, start-screen logo, accent colour, permission strings.
+- Bundle identifiers: `family.safechat.app` (app), `family.safechat.app.nse` (notification service
+  extension), `family.safechat.app.share` (share extension), app group `group.family.safechat`.
+- Associated domains and universal links point at `safechat.family` instead of `element.io`.
+- Account provider locked to `safechat.family`; the server picker and "Create account" are hidden.
+- Push notifications go through our own gateway at `push.safechat.family`.
+- PostHog analytics, Sentry and MapTiler are disabled (no keys are shipped).
+- Element's commercial licence offer (`LICENSE-COMMERCIAL`), the `Enterprise` submodule and the
+  Element-only CI workflows have been removed.
 
-## Status
-
-This project is actively developed and supported. New users are recommended to use Element X instead of the previous-generation app.
-
-## Contributing
-
-Please see our [contribution guide](CONTRIBUTING.md).
-
-Come chat with the community in the dedicated Matrix [room](https://matrix.to/#/#element-x-ios:matrix.org).
+The fork deliberately keeps the upstream directory layout, target names and Xcode project name
+(`ElementX`) so that merges from upstream stay cheap. Only the user-visible name and the bundle
+identifiers change.
 
 ## Build instructions
 
-Please refer to the [setting up a development environment](CONTRIBUTING.md#setting-up-a-development-environment) section from the [contribution guide](CONTRIBUTING.md).
+You need macOS with Xcode 26.5 and [XcodeGen](https://github.com/yonaskolb/XcodeGen).
 
-## Support
+```sh
+brew install xcodegen swiftlint swiftformat git-lfs pkl
+git lfs install
+git clone https://github.com/unicornops/familychat-ios.git
+cd familychat-ios
+xcodegen            # regenerates ElementX.xcodeproj from project.yml / app.yml / */target.yml
+open ElementX.xcodeproj
+```
 
-When you are experiencing an issue on Element X iOS, please first search in [GitHub issues](https://github.com/element-hq/element-x-ios/issues)
-and then in [#element-x-ios:matrix.org](https://matrix.to/#/#element-x-ios:matrix.org).
-If after your research you still have a question, ask at [#element-x-ios:matrix.org](https://matrix.to/#/#element-x-ios:matrix.org). Otherwise feel free to create a GitHub issue if you encounter a bug or a crash, by explaining clearly in detail what happened. You can also perform bug reporting (Rageshake) from the Element application by going to the application settings. This is especially recommended when you encounter a crash.
+Always re-run `xcodegen` after changing `app.yml`, `project.yml` or any `SupportingFiles/target.yml`,
+and commit the regenerated project.
 
-## Forking
+Signing: `DEVELOPMENT_TEAM` in [`app.yml`](app.yml) is intentionally empty so that unsigned simulator
+builds work on CI. Set it to the Apple Developer Team ID before building for a device, TestFlight or
+the App Store.
 
-Please read our [forking guide](docs/FORKING.md).
+Runtime configuration lives in
+[`AppSettings.swift`](ElementX/Sources/Application/Settings/AppSettings.swift). See upstream's
+[forking guide](docs/FORKING.md) for background.
+
+## Merging upstream releases
+
+Upstream ships a release roughly monthly, using calendar versions.
+
+```sh
+git remote add upstream https://github.com/element-hq/element-x-ios   # once
+git fetch upstream --tags
+
+git switch familychat
+git switch -c chore/merge-upstream-<version>
+git merge release/<version>            # e.g. release/26.10.0
+# resolve conflicts, keeping our branding/config; then:
+xcodegen
+swift run tools ci unit-tests
+```
+
+Open a pull request against `familychat`. Never push to `element-hq`.
+
+Conflicts are expected in `app.yml`, `ElementX/SupportingFiles/target.yml`,
+`ElementX/Sources/Application/Settings/AppSettings.swift`, `Components/Secrets/Secrets.swift`,
+`README.md` and `.github/workflows/`. Everything else should merge cleanly.
+
+## Continuous integration
+
+[`build.yml`](.github/workflows/build.yml) runs on every pull request and on pushes to `familychat`.
+It regenerates the project with XcodeGen, builds the app unsigned for the iOS simulator and runs the
+unit tests. Snapshot ("preview") tests are skipped because the rebrand invalidates upstream's
+reference images; add the `record-snapshots` label to a pull request to re-record them with
+[`record-snapshots.yml`](.github/workflows/record-snapshots.yml).
+
+## Translations
+
+Upstream strings are managed with Localazy. **Localazy sync is disabled in this fork** (the
+`translations-pr` workflow has been removed) because our brand-bearing strings would be overwritten
+on the next sync. Strings are edited directly in `ElementX/Resources/Localizations/`.
+
+## Reporting issues
+
+Please use the [Family Chat issue tracker](https://github.com/unicornops/family-chat/issues).
+Security issues: see [SECURITY.md](SECURITY.md).
 
 ## Copyright & License
 
+Copyright (c) 2026 UnicornOps Ltd.
 Copyright (c) 2025 - 2026 Element Creations Ltd.
 Copyright (c) 2022 - 2025 New Vector Ltd.
 
-This software is dual licensed by Element Creations Ltd (Element). It can be used either:
+This program is free software: you can redistribute it and/or modify it under the terms of the GNU
+Affero General Public License as published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version. See [LICENSE](LICENSE).
 
-(1) for free under the terms of the GNU Affero General Public License (as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version); OR
+Upstream Element X iOS is dual licensed by Element under the AGPL-3.0 and a paid-for Element
+Commercial License. **This fork is distributed under the AGPL-3.0 only.** Element's commercial offer
+is Element's to make, not ours, so `LICENSE-COMMERCIAL` has been removed. Source files carry
+upstream's `SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Element-Commercial` header, which is
+upstream's own copyright notice and is preserved unchanged; the `AGPL-3.0-only` branch of that
+identifier is the licence under which we redistribute.
 
-(2) under the terms of a paid-for Element Commercial License agreement between you and Element (the terms of which may vary depending on what you and Element have agreed to). 
-
-Unless required by applicable law or agreed to in writing, software distributed under the Licenses is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the Licenses for the specific language governing permissions and limitations under the Licenses.
+Unless required by applicable law or agreed to in writing, software distributed under the License is
+distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+implied.

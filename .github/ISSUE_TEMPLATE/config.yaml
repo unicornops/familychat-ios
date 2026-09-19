@@ -1,8 +1,11 @@
-blank_issues_enabled: true
+blank_issues_enabled: false
 contact_links:
- - name: Matrix Community Support
-   url: "https://matrix.to/#/#matrix:matrix.org"
-   about: General support questions can be asked here.
- - name: Matrix Security Policy
-   url: https://www.matrix.org/security-disclosure-policy/
-   about: Learn more about our security disclosure policy.
+ - name: Family Chat issue tracker
+   url: https://github.com/unicornops/family-chat/issues
+   about: Please report bugs and feature requests for the Family Chat iOS client here.
+ - name: Family Chat support
+   url: https://safechat.family/docs/
+   about: Help and documentation for Family Chat.
+ - name: Security disclosures
+   url: https://safechat.family/legal/security/
+   about: Please report security issues privately, not as a public issue.
