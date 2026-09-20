@@ -27,6 +27,9 @@ final class AuthenticationStartScreenViewModelTests {
     
     init() {
         appSettings = AppSettings.volatile()
+        // Family Chat locks the app to a single account provider. Restore the upstream default
+        // here so that each test can opt in to the locked-down configuration explicitly.
+        setAccountProviders(["matrix.org"], allowOtherAccountProviders: true)
     }
     
     @Test
@@ -97,7 +100,7 @@ final class AuthenticationStartScreenViewModelTests {
     @Test
     func singleProviderOAuthState() async throws {
         // Given a view model that for an app that only allows the use of a single provider that supports OAuth.
-        setAllowedAccountProviders(["company.com"])
+        setAccountProviders(["company.com"])
         await setupViewModel()
         #expect(authenticationService.homeserver.value.loginMode == .unknown)
         #expect(client.urlForOauthOauthConfigurationPromptLoginHintDeviceIdAdditionalScopesCallsCount == 0)
@@ -118,7 +121,7 @@ final class AuthenticationStartScreenViewModelTests {
     @Test
     func singleProviderPasswordState() async throws {
         // Given a view model that for an app that only allows the use of a single provider that does not support OAuth.
-        setAllowedAccountProviders(["company.com"])
+        setAccountProviders(["company.com"])
         await setupViewModel(supportsOAuth: false)
         #expect(authenticationService.homeserver.value.loginMode == .unknown)
         #expect(client.urlForOauthOauthConfigurationPromptLoginHintDeviceIdAdditionalScopesCallsCount == 0)
@@ -214,7 +217,7 @@ final class AuthenticationStartScreenViewModelTests {
         // Given a view model for an app that only allows a single provider that matches the Classic account's server.
         let classicAppAccount = makeClassicAppAccount(serverName: "company.com",
                                                       homeserverURL: "https://matrix.company.com")
-        setAllowedAccountProviders(["company.com"])
+        setAccountProviders(["company.com"])
         await setupViewModel(classicAppAccount: classicAppAccount)
         
         // Then the Classic app account should be shown as a welcome-back option.
@@ -230,7 +233,7 @@ final class AuthenticationStartScreenViewModelTests {
         // Given a view model for an app that only allows a single provider that does NOT match the Classic account's server.
         let classicAppAccount = makeClassicAppAccount(serverName: "other-server.org",
                                                       homeserverURL: "https://matrix.other-server.org")
-        setAllowedAccountProviders(["company.com"])
+        setAccountProviders(["company.com"])
         await setupViewModel(classicAppAccount: classicAppAccount)
         
         // Then the Classic app account should not be shown since the server is not in the allowed providers.
@@ -330,9 +333,9 @@ final class AuthenticationStartScreenViewModelTests {
                           accessToken: "accessToken")
     }
     
-    private func setAllowedAccountProviders(_ providers: [String]) {
+    private func setAccountProviders(_ providers: [String], allowOtherAccountProviders: Bool = false) {
         appSettings.override(accountProviders: providers,
-                             allowOtherAccountProviders: false,
+                             allowOtherAccountProviders: allowOtherAccountProviders,
                              hideBrandChrome: false,
                              pushGatewayBaseURL: appSettings.pushGatewayBaseURL,
                              oAuthRedirectURL: appSettings.oAuthRedirectURL,

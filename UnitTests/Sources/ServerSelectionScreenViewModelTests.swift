@@ -288,10 +288,10 @@ struct ServerSelectionScreenViewModelTests {
         context.send(viewAction: .updateTextField(textField))
         
         // When the user types a prefix that matches an account provider.
-        let typedSoFar = "ma"
-        let nextCharacter = "t"
+        let typedSoFar = "sa"
+        let nextCharacter = "f"
         let typed = typedSoFar + nextCharacter
-        let expectedAddress = "matrix.org"
+        let expectedAddress = "safechat.family"
         textField.text = typedSoFar
         let deferred = deferFulfillment(context.observe(\.homeserverAddress)) { $0 == expectedAddress }
         _ = textField.delegate?.textField?(textField, shouldChangeCharactersIn: NSRange(location: typedSoFar.count, length: 0), replacementString: nextCharacter)

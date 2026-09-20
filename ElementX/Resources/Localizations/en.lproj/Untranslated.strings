@@ -1,3 +1,5 @@
+"screen_about_source_code" = "Source code";
+"screen_about_source_code_notice" = "Family Chat is a fork of Element X by Element (AGPL-3.0); source at https://github.com/unicornops/familychat-ios";
 "screen_home_tab_search" = "Search";
 "screen_search_empty_state_message" = "Search for chats and messages";
 "screen_search_empty_state_title" = "Start searching...";

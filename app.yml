@@ -1,14 +1,11 @@
 settings:
-  APP_DISPLAY_NAME: Element X
-  PRODUCTION_APP_NAME: Element
-  APP_GROUP_IDENTIFIER: group.io.element
-  BASE_BUNDLE_IDENTIFIER: io.element.elementx
+  APP_DISPLAY_NAME: Family Chat
+  PRODUCTION_APP_NAME: Family Chat
+  APP_GROUP_IDENTIFIER: group.family.safechat
+  BASE_BUNDLE_IDENTIFIER: family.safechat.app
   ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: "colors/accent-color"
-  DEVELOPMENT_TEAM: 7J4U792NQT
+  # PLACEHOLDER: the Apple Developer Team ID for the Family Chat organisation.
+  # Leave empty for unsigned simulator builds on CI; fill it in before any
+  # device build, TestFlight upload or App Store submission.
+  DEVELOPMENT_TEAM: ""
   IS_NIGHTLY_BUILD: false
-
-  # Optional configuration to load accounts from Element Classic.
-  CLASSIC_APP_GROUP_IDENTIFIER: group.im.vector
-  CLASSIC_APP_KEYCHAIN_SERVICE_IDENTIFIER: im.vector.app.encryption-manager-service
-  CLASSIC_APP_KEYCHAIN_ACCESS_GROUP_IDENTIFIER: "$(DEVELOPMENT_TEAM).im.vector.app.keychain.shared"
-  CLASSIC_APP_DEEP_LINK_URL: "element://open"

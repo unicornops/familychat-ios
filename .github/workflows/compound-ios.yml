@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
   push:
-    branches: [develop]
+    branches: [familychat]
     paths:
       - "compound-ios/**"
 
@@ -64,12 +64,3 @@ jobs:
           path: compound-ios/Logs/CompoundTests.xcresult.zip
           retention-days: 1
           if-no-files-found: ignore
-
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
-        with:
-          fail_ci_if_error: false
-          token: ${{ secrets.CODECOV_TOKEN }}
-          xcode: true
-          xcode_archive_path: compound-ios/Logs/CompoundTests.xcresult
-          flags: compound
