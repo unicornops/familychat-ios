@@ -96,13 +96,13 @@ struct AppRouteURLParserTests {
         // A token without a host, and a host without a token, are both ignored.
         for query in ["token=syl_abc", "hs=smith.safechat.family"] {
             let url = try #require(URL(string: "https://safechat.family/app/login?account_provider=smith.safechat.family&\(query)"))
-            #expect(appRouteURLParser.route(from: url) == .accountProvisioningLink(plain), "\(query)")
+            #expect(appRouteURLParser.route(from: url) == .accountProvisioningLink(plain), Comment(rawValue: query))
         }
         
         // A host that is not a bare hostname drops the code entirely: the token is never sent anywhere odd.
         for hs in ["https%3A%2F%2Fsmith.safechat.family", "smith.safechat.family%2Fpath", "user%40smith.safechat.family", "smith.safechat.family:abc", "-smith.safechat.family"] {
             let url = try #require(URL(string: "https://safechat.family/app/login?account_provider=smith.safechat.family&hs=\(hs)&token=syl_abc"))
-            #expect(appRouteURLParser.route(from: url) == .accountProvisioningLink(plain), hs)
+            #expect(appRouteURLParser.route(from: url) == .accountProvisioningLink(plain), Comment(rawValue: hs))
         }
     }
     
