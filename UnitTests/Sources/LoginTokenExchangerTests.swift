@@ -82,7 +82,7 @@ struct LoginTokenExchangerTests {
 // MARK: - Stubbed endpoint
 
 /// Records every request the exchanger makes and answers with a fixed response.
-private final class LoginRequestRecorder: @unchecked Sendable {
+private final nonisolated class LoginRequestRecorder: @unchecked Sendable {
     var requests: [URLRequest] = []
     var bodies: [Data] = []
 }
