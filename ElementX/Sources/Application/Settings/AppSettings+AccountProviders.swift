@@ -10,7 +10,7 @@ import Foundation
 /// Family Chat runs one homeserver per family under `<slug>.safechat.family`, so `accountProviders` accepts
 /// wildcard entries: `*.suffix` matches any subdomain of `suffix` (one or more labels), never the bare suffix.
 /// Matching ignores case. A plain entry matches exactly as upstream.
-extension AppSettings {
+nonisolated extension AppSettings {
     /// Whether `pattern` is a wildcard entry.
     static func isWildcardAccountProvider(_ pattern: String) -> Bool {
         pattern.hasPrefix("*.")
