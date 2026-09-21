@@ -200,9 +200,9 @@ class MockScreen: Identifiable {
                 flowCoordinator.handleAppRoute(.accountProvisioningLink(.init(accountProvider: "example.com", loginHint: nil)), animated: false)
             } else if id == .signInCodeAuthenticationFlow {
                 flowCoordinator.handleAppRoute(.accountProvisioningLink(.init(accountProvider: "example.com",
-                                                                            loginHint: "mxid:@alice:example.com",
-                                                                            hs: "example.com",
-                                                                            token: "syl_used_code")),
+                                                                              loginHint: "mxid:@alice:example.com",
+                                                                              hs: "example.com",
+                                                                              token: "syl_used_code")),
                                                animated: false)
             }
             

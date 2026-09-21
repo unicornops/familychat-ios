@@ -100,7 +100,9 @@ struct AccountProvisioningParameters: Hashable {
     }
     
     /// Whether the link carries a sign-in code to redeem before falling back to the password flow.
-    var hasSignInCode: Bool { hs != nil && token != nil }
+    var hasSignInCode: Bool {
+        hs != nil && token != nil
+    }
     
     /// The same parameters without the sign-in code (used when its homeserver is not an allowed account provider).
     var withoutSignInCode: AccountProvisioningParameters {

@@ -7,8 +7,8 @@
 // Please see LICENSE files in the repository root for full details.
 //
 
-@testable import ElementX
 import Combine
+@testable import ElementX
 import MatrixRustSDKMocks
 import Testing
 import UIKit
@@ -428,10 +428,12 @@ final class AuthenticationStartScreenViewModelTests {
 
 extension AuthenticationStartScreenViewModelAction {
     var isSignedIn: Bool {
-        if case .signedIn = self { return true }
+        if case .signedIn = self {
+            return true
+        }
         return false
     }
-
+    
     var isLoginDirectlyWithOAuth: Bool {
         switch self {
         case .loginDirectlyWithOAuth: true

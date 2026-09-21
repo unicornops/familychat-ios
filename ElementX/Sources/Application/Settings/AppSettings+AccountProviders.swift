@@ -40,14 +40,18 @@ nonisolated extension AppSettings {
     /// Whether the app may sign in to `serverName` (a server name, a host, or a URL whose host is checked).
     /// Always true when any account provider is allowed.
     func isAllowedAccountProvider(_ serverName: String) -> Bool {
-        if allowOtherAccountProviders { return true }
+        if allowOtherAccountProviders {
+            return true
+        }
         let host = Self.host(from: serverName)
         return accountProviders.contains { Self.accountProvider(host, matches: $0) }
     }
     
     /// An example a user can copy for the wildcard rule: `yourfamily.safechat.family`.
     var exampleAccountProvider: String {
-        guard let first = accountProviders.first else { return "" }
+        guard let first = accountProviders.first else {
+            return ""
+        }
         return Self.isWildcardAccountProvider(first) ? "yourfamily\(first.dropFirst())" : first
     }
     

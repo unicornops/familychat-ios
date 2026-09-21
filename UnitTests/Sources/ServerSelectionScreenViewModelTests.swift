@@ -423,11 +423,11 @@ struct ServerSelectionScreenViewModelTests {
         // matrix.org: OAuth. example.com: password only. server.net: no login. secure.gov: OAuth + Element Pro required.
         // smith.safechat.family: a Family Chat family homeserver, password only.
         factoryConfiguration.homeserverClients["smith.safechat.family"] = ClientSDKMock(.init(serverName: "smith.safechat.family",
-                                                                                            homeserverURL: "https://smith.safechat.family",
-                                                                                            slidingSyncVersion: .native,
-                                                                                            oAuthLoginURL: nil,
-                                                                                            supportsOAuthCreatePrompt: false,
-                                                                                            supportsPasswordLogin: true))
+                                                                                              homeserverURL: "https://smith.safechat.family",
+                                                                                              slidingSyncVersion: .native,
+                                                                                              oAuthLoginURL: nil,
+                                                                                              supportsOAuthCreatePrompt: false,
+                                                                                              supportsPasswordLogin: true))
         client = factoryConfiguration.homeserverClients["matrix.org"]
         clientFactory = ClientFactoryMock(factoryConfiguration)
         

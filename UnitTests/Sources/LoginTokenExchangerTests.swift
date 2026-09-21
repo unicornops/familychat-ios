@@ -107,8 +107,13 @@ private final class StubbedLoginEndpoint: URLProtocol {
         return recorder
     }
     
-    override class func canInit(with request: URLRequest) -> Bool { true }
-    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+    override class func canInit(with request: URLRequest) -> Bool {
+        true
+    }
+    
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest {
+        request
+    }
     
     override func startLoading() {
         Self.recorder.requests.append(request)
@@ -124,7 +129,9 @@ private final class StubbedLoginEndpoint: URLProtocol {
         client?.urlProtocolDidFinishLoading(self)
     }
     
-    override func stopLoading() { }
+    override func stopLoading() {
+        // Nothing to cancel: the stubbed answer is delivered synchronously.
+    }
     
     /// URLSession hands a POST body to a `URLProtocol` as a stream, not as `httpBody`.
     private static func read(_ stream: InputStream) -> Data {

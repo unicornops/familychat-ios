@@ -195,11 +195,11 @@ struct AuthenticationServiceTests {
         var configuration: ClientFactoryMock.Configuration = .init()
         // A family homeserver, reached by its client-server URL as a sign-in link names it.
         configuration.homeserverClients["https://smith.safechat.family"] = ClientSDKMock(.init(serverName: "smith.safechat.family",
-                                                                                              homeserverURL: "https://smith.safechat.family",
-                                                                                              slidingSyncVersion: .native,
-                                                                                              oAuthLoginURL: nil,
-                                                                                              supportsOAuthCreatePrompt: false,
-                                                                                              supportsPasswordLogin: true))
+                                                                                               homeserverURL: "https://smith.safechat.family",
+                                                                                               slidingSyncVersion: .native,
+                                                                                               oAuthLoginURL: nil,
+                                                                                               supportsOAuthCreatePrompt: false,
+                                                                                               supportsPasswordLogin: true))
         let clientFactory = ClientFactoryMock(configuration)
         
         client = configuration.homeserverClients[serverAddress]
