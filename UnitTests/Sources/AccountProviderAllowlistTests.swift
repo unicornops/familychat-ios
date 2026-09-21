@@ -36,8 +36,9 @@ struct AccountProviderAllowlistTests {
         #expect(appSettings.hasWildcardAccountProvider)
         #expect(appSettings.pickableAccountProviders.isEmpty)
         #expect(appSettings.exampleAccountProvider == "yourfamily.safechat.family")
-        // A wildcard rule is never offered as the server to sign in to.
-        #expect(appSettings.defaultServer == "")
+        // A wildcard rule is never offered as the server to sign in to, only its suffix as a starting point.
+        #expect(appSettings.suggestedAccountProviders == ["safechat.family"])
+        #expect(appSettings.defaultServer == "safechat.family")
         
         // Then family servers are allowed, as a name, a host with port, or a URL.
         #expect(appSettings.isAllowedAccountProvider("smith.safechat.family"))

@@ -131,9 +131,10 @@ struct HomeserverHistoryManagerTests {
         // Given a manager with no history and the default `*.safechat.family` rule.
         let manager = createManager(withServerHistory: [])
         
-        // Then the rule is never completed as if it were a server.
+        // Then the rule is never completed as if it were a server, only its suffix is suggested.
         #expect(manager.server(matchingPrefix: "*") == nil)
         #expect(manager.server(matchingPrefix: "*.") == nil)
+        #expect(manager.server(matchingPrefix: "sa") == "safechat.family")
     }
     
     private func createManager(withServerHistory history: [String]) -> HomeserverHistoryManager {

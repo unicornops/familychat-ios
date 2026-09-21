@@ -68,7 +68,7 @@ class HomeserverHistoryManager {
     /// in all lowercase. This is the list that matches are made against.
     private func updateCachedServers() {
         let previous = appSettings.previousServers.map { $0.lowercased() }
-        let defaultProviders = appSettings.pickableAccountProviders.map { $0.lowercased() }
+        let defaultProviders = appSettings.suggestedAccountProviders.map { $0.lowercased() }
         
         cachedServers = previous + defaultProviders
     }

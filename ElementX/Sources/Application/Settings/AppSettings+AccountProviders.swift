@@ -32,6 +32,12 @@ nonisolated extension AppSettings {
         accountProviders.filter { !Self.isWildcardAccountProvider($0) }
     }
     
+    /// The account providers worth suggesting while typing: plain entries as they are, a wildcard rule as its suffix
+    /// (`*.safechat.family` → `safechat.family`), which the user completes with their family's name.
+    var suggestedAccountProviders: [String] {
+        accountProviders.map { Self.isWildcardAccountProvider($0) ? String($0.dropFirst(2)) : $0 }
+    }
+    
     /// Whether `accountProviders` contains a wildcard rule, in which case the user has to type their own server.
     var hasWildcardAccountProvider: Bool {
         accountProviders.contains(where: Self.isWildcardAccountProvider)

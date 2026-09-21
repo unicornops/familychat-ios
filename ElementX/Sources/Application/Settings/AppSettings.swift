@@ -196,8 +196,8 @@ final nonisolated class AppSettings: @unchecked Sendable {
         if let previousServer = previousServers.first {
             return previousServer
         }
-        // A wildcard entry is a rule, not a server: never offer it as the address to sign in to.
-        return pickableAccountProviders.first ?? ""
+        // A wildcard entry is a rule, not a server: offer its suffix as the starting point to type from.
+        return pickableAccountProviders.first ?? suggestedAccountProviders.first ?? ""
     }
     
     // MARK: - Security
