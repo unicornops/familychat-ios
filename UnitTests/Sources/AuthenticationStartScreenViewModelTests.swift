@@ -1,12 +1,14 @@
 //
 // Copyright 2025 Element Creations Ltd.
 // Copyright 2022-2025 New Vector Ltd.
+// Copyright 2026 Unicorn Operations Ltd.
 //
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Element-Commercial.
 // Please see LICENSE files in the repository root for full details.
 //
 
 @testable import ElementX
+import Combine
 import MatrixRustSDKMocks
 import Testing
 import UIKit
@@ -202,6 +204,60 @@ final class AuthenticationStartScreenViewModelTests {
     }
     
     @Test
+    func provisionedSignInCodeSignsIn() async throws {
+        // Given a provisioning link carrying a sign-in code the family homeserver accepts.
+        let exchanger = LoginTokenExchangerMock(.init(result: .success(.mockAna)))
+        let deferred = deferFulfillment(earlyActions) { $0.isSignedIn }
+        await setupViewModel(provisioningParameters: .init(accountProvider: "company.com", loginHint: "mxid:@ana:company.com", hs: "company.com", token: "syl_code"),
+                             supportsOAuth: false,
+                             loginTokenExchanger: exchanger)
+        
+        // Then the code is redeemed against https://<hs> straight away and the flow completes, no password prompt.
+        try await deferred.fulfill()
+        #expect(exchanger.exchangeCallsCount == 1)
+        #expect(exchanger.exchangeReceivedArguments?.token == "syl_code")
+        #expect(exchanger.exchangeReceivedArguments?.homeserverURL == "https://company.com")
+        #expect(context.alertInfo == nil)
+        #expect(context.viewState.serverName == "company.com")
+    }
+    
+    @Test
+    func provisionedSignInCodeRejectedFallsBackToPassword() async throws {
+        // Given a provisioning link whose sign-in code was already used.
+        let exchanger = LoginTokenExchangerMock(.init(result: .failure(.rejected(errcode: "M_FORBIDDEN"))))
+        await setupViewModel(provisioningParameters: .init(accountProvider: "company.com", loginHint: "mxid:@ana:company.com", hs: "company.com", token: "syl_code"),
+                             supportsOAuth: false,
+                             loginTokenExchanger: exchanger)
+        
+        // Then the user is told the code cannot be used.
+        let deferredAlert = deferFulfillment(context.observe(\.viewState.bindings.alertInfo)) { $0?.id == .signInCodeRejected }
+        try await deferredAlert.fulfill()
+        #expect(exchanger.exchangeCallsCount == 1)
+        
+        // When continuing, the password flow for the same server follows, pre-filled from the link.
+        let deferredAction = deferFulfillment(viewModel.actions) { $0 == .loginDirectlyWithPassword(loginHint: "mxid:@ana:company.com") }
+        let continueAction = try #require(context.alertInfo?.primaryButton.action)
+        continueAction()
+        try await deferredAction.fulfill()
+        #expect(clientFactory.makeAuthenticationClientHomeserverAddressSessionDirectoriesPassphraseClientSessionDelegateAppSettingsAppHooksReceivedArguments?.homeserverAddress == "company.com")
+    }
+    
+    @Test
+    func provisionedSignInCodeForDisallowedHomeserverIsNeverSent() async throws {
+        // Given the app is locked to *.safechat.family and a link names another homeserver for its code.
+        setAccountProviders(["*.safechat.family", "company.com"])
+        let exchanger = LoginTokenExchangerMock(.init(result: .success(.mockAna)))
+        await setupViewModel(provisioningParameters: .init(accountProvider: "company.com", loginHint: nil, hs: "evil.example", token: "syl_code"),
+                             supportsOAuth: false,
+                             loginTokenExchanger: exchanger)
+        
+        // Then the code is refused locally and nothing is sent.
+        let deferredAlert = deferFulfillment(context.observe(\.viewState.bindings.alertInfo)) { $0?.id == .signInCodeFailed }
+        try await deferredAlert.fulfill()
+        #expect(exchanger.exchangeCallsCount == 0)
+    }
+    
+    @Test
     func classicAppAccountWithProvisioningLink() async {
         // Given a view model that has been provisioned with a provisioning link (and a classic account exists).
         let classicAppAccount = makeClassicAppAccount()
@@ -276,18 +332,28 @@ final class AuthenticationStartScreenViewModelTests {
     
     // MARK: - Helpers
     
+    /// The view model is created inside `setupViewModel` and may act during its own `init`, so an expectation about
+    /// its first actions has to be registered on a publisher that exists before it does.
+    private let earlyActionsSubject = PassthroughSubject<AuthenticationStartScreenViewModelAction, Never>()
+    private var earlyActionsCancellable: AnyCancellable?
+    private var earlyActions: AnyPublisher<AuthenticationStartScreenViewModelAction, Never> {
+        earlyActionsSubject.eraseToAnyPublisher()
+    }
+    
     private func setupViewModel(classicAppAccount: ClassicAppAccount? = nil,
                                 provisioningParameters: AccountProvisioningParameters? = nil,
                                 supportsOAuth: Bool = true,
                                 supportsPasswordLogin: Bool = true,
-                                availableSecrets: ClassicAppAccount.AvailableSecrets = .complete) async {
+                                availableSecrets: ClassicAppAccount.AvailableSecrets = .complete,
+                                loginTokenExchanger: LoginTokenExchangerProtocol = LoginTokenExchangerMock()) async {
         // Manually create a configuration as the default homeserver address setting is immutable.
         client = ClientSDKMock(.init(oAuthLoginURL: supportsOAuth ? "https://account.company.com/authorize" : nil,
                                      supportsOAuthCreatePrompt: false,
                                      supportsPasswordLogin: supportsPasswordLogin))
         // Map both the server name and the homeserver URL so fallback lookups work.
         let homeserverClients: [String: ClientSDKMock] = ["company.com": client,
-                                                          "https://matrix.company.com": client]
+                                                          "https://matrix.company.com": client,
+                                                          "https://company.com": client] // as a sign-in link names it
         let configuration = ClientFactoryMock.Configuration(homeserverClients: homeserverClients)
         
         if let classicAppAccount {
@@ -303,6 +369,7 @@ final class AuthenticationStartScreenViewModelTests {
                                                       encryptionKeyProvider: EncryptionKeyProvider(),
                                                       classicAppManager: classicAppManager,
                                                       clientFactory: clientFactory,
+                                                      loginTokenExchanger: loginTokenExchanger,
                                                       appSettings: appSettings,
                                                       appHooks: AppHooks())
         
@@ -316,6 +383,7 @@ final class AuthenticationStartScreenViewModelTests {
                                                        mediaProvider: MediaProviderMock(.init()),
                                                        notificationCenter: notificationCenter,
                                                        userIndicatorController: UserIndicatorControllerMock())
+        earlyActionsCancellable = viewModel.actions.sink { [earlyActionsSubject] in earlyActionsSubject.send($0) }
         
         // Add a fake window in order for the OAuth flow to continue
         viewModel.context.send(viewAction: .updateWindow(UIWindow()))
@@ -359,6 +427,11 @@ final class AuthenticationStartScreenViewModelTests {
 }
 
 extension AuthenticationStartScreenViewModelAction {
+    var isSignedIn: Bool {
+        if case .signedIn = self { return true }
+        return false
+    }
+
     var isLoginDirectlyWithOAuth: Bool {
         switch self {
         case .loginDirectlyWithOAuth: true

@@ -1,6 +1,7 @@
 //
 // Copyright 2025 Element Creations Ltd.
 // Copyright 2022-2025 New Vector Ltd.
+// Copyright 2026 Unicorn Operations Ltd.
 //
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Element-Commercial.
 // Please see LICENSE files in the repository root for full details.
@@ -126,10 +127,20 @@ class AuthenticationFlowCoordinator: FlowCoordinatorProtocol {
         MXLog.info("Handling app route: \(appRoute)")
         
         switch appRoute {
-        case .accountProvisioningLink(let provisioningParameters):
-            guard appSettings.allowOtherAccountProviders else {
-                MXLog.error("Provisioning links not allowed, ignoring.")
+        case .accountProvisioningLink(let linkParameters):
+            // Family Chat: links are honoured for any allowed account provider (`*.safechat.family`), not only when
+            // arbitrary providers are allowed as upstream requires.
+            guard appSettings.isAllowedAccountProvider(linkParameters.accountProvider) else {
+                MXLog.error("Provisioning link for a disallowed account provider, ignoring.")
                 return
+            }
+            
+            // A sign-in code is only redeemed against an allowed homeserver; otherwise the link degrades to the
+            // plain account provider + login hint prefill and the token goes nowhere.
+            var provisioningParameters = linkParameters
+            if let hs = linkParameters.hs, !appSettings.isAllowedAccountProvider(hs) {
+                MXLog.error("Provisioning link's sign-in code names a disallowed homeserver, dropping the code.")
+                provisioningParameters = linkParameters.withoutSignInCode
             }
             
             if stateMachine.state != .startScreen {
@@ -285,6 +296,8 @@ class AuthenticationFlowCoordinator: FlowCoordinatorProtocol {
                     showOAuthAuthentication(oAuthData: oAuthData, presentationAnchor: window)
                 case .loginDirectlyWithPassword(let loginHint):
                     stateMachine.tryEvent(.continueWithPassword, userInfo: loginHint)
+                case .signedIn(let userSession):
+                    stateMachine.tryEvent(.signedIn, userInfo: userSession)
                     
                 case .reportProblem:
                     stateMachine.tryEvent(.reportProblem)

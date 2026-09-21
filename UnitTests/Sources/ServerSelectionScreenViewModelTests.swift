@@ -1,6 +1,7 @@
 //
 // Copyright 2025 Element Creations Ltd.
 // Copyright 2022-2025 New Vector Ltd.
+// Copyright 2026 Unicorn Operations Ltd.
 //
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Element-Commercial.
 // Please see LICENSE files in the repository root for full details.
@@ -354,12 +355,79 @@ struct ServerSelectionScreenViewModelTests {
     
     // MARK: - Helpers
     
-    private mutating func setup(authenticationFlow: AuthenticationFlow,
-                                mode: ServerSelectionScreenMode = .userInput) throws {
-        appSettings = AppSettings.volatile()
+    @Test
+    mutating func userInputRefusesServersOutsideTheAccountProviders() async throws {
+        // Given the app locked to *.safechat.family (the default) with the user typing their server.
+        try setup(authenticationFlow: .login, allowOtherAccountProviders: false)
+        #expect(appSettings.hasWildcardAccountProvider)
         
-        let factoryConfiguration = ClientFactoryMock.Configuration()
+        // When confirming a server outside the rule.
+        context.homeserverAddress = "matrix.org"
+        let deferred = deferFulfillment(context.observe(\.viewState.footerErrorMessage)) { $0 != nil }
+        context.send(viewAction: .confirm)
+        try await deferred.fulfill()
+        
+        // Then it is refused before any network request, with an example of what is accepted.
+        #expect(context.viewState.footerErrorMessage?.contains("yourfamily.safechat.family") == true)
+        #expect(clientFactory.makeAuthenticationClientHomeserverAddressSessionDirectoriesPassphraseClientSessionDelegateAppSettingsAppHooksCallsCount == 0)
+        #expect(service.homeserver.value.loginMode == .unknown)
+    }
+    
+    @Test
+    mutating func userInputAcceptsFamilyServers() async throws {
+        // Given the app locked to *.safechat.family with a family server the factory knows about.
+        try setup(authenticationFlow: .login, allowOtherAccountProviders: false)
+        
+        // When confirming the family's server (as a Matrix ID, which is what people tend to type).
+        context.homeserverAddress = "@ana:smith.safechat.family"
+        let deferred = deferFulfillment(viewModel.actions) { $0.isContinueWithPassword }
+        context.send(viewAction: .confirm)
+        try await deferred.fulfill()
+        
+        // Then the server is configured as usual.
+        #expect(clientFactory.makeAuthenticationClientHomeserverAddressSessionDirectoriesPassphraseClientSessionDelegateAppSettingsAppHooksReceivedArguments?.homeserverAddress == "smith.safechat.family")
+        #expect(service.homeserver.value.loginMode == .password)
+    }
+    
+    // MARK: - Helpers
+    
+    private mutating func setup(authenticationFlow: AuthenticationFlow,
+                                mode: ServerSelectionScreenMode = .userInput,
+                                allowOtherAccountProviders: Bool = true) throws {
+        appSettings = AppSettings.volatile()
+        // Family Chat locks the app to `*.safechat.family`; upstream's tests type arbitrary servers, so each test
+        // opts in to the locked-down configuration explicitly.
+        appSettings.override(accountProviders: appSettings.accountProviders,
+                             allowOtherAccountProviders: allowOtherAccountProviders,
+                             hideBrandChrome: false,
+                             pushGatewayBaseURL: appSettings.pushGatewayBaseURL,
+                             oAuthRedirectURL: appSettings.oAuthRedirectURL,
+                             oAuthClientURIPath: appSettings.oAuthClientURIPath,
+                             websiteURL: appSettings.websiteURL,
+                             logoURL: appSettings.logoURL,
+                             copyrightURL: appSettings.copyrightURL,
+                             acceptableUseURL: appSettings.acceptableUseURL,
+                             privacyURL: appSettings.privacyURL,
+                             encryptionURL: appSettings.encryptionURL,
+                             deviceVerificationURL: appSettings.deviceVerificationURL,
+                             chatBackupDetailsURL: appSettings.chatBackupDetailsURL,
+                             identityPinningViolationDetailsURL: appSettings.identityPinningViolationDetailsURL,
+                             historySharingDetailsURL: appSettings.historySharingDetailsURL,
+                             elementWebHosts: appSettings.elementWebHosts,
+                             accountProvisioningHost: appSettings.accountProvisioningHost,
+                             bugReportApplicationID: appSettings.bugReportApplicationID,
+                             analyticsTermsURL: appSettings.analyticsTermsURL,
+                             mapTilerConfiguration: AppSettings.bundledMapTilerConfiguration)
+        
+        var factoryConfiguration = ClientFactoryMock.Configuration()
         // matrix.org: OAuth. example.com: password only. server.net: no login. secure.gov: OAuth + Element Pro required.
+        // smith.safechat.family: a Family Chat family homeserver, password only.
+        factoryConfiguration.homeserverClients["smith.safechat.family"] = ClientSDKMock(.init(serverName: "smith.safechat.family",
+                                                                                            homeserverURL: "https://smith.safechat.family",
+                                                                                            slidingSyncVersion: .native,
+                                                                                            oAuthLoginURL: nil,
+                                                                                            supportsOAuthCreatePrompt: false,
+                                                                                            supportsPasswordLogin: true))
         client = factoryConfiguration.homeserverClients["matrix.org"]
         clientFactory = ClientFactoryMock(factoryConfiguration)
         

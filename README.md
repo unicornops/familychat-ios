@@ -26,7 +26,11 @@ endorsed by, or supported by Element.
 - Bundle identifiers: `family.safechat.app` (app), `family.safechat.app.nse` (notification service
   extension), `family.safechat.app.share` (share extension), app group `group.family.safechat`.
 - Associated domains and universal links point at `safechat.family` instead of `element.io`.
-- Account provider locked to `safechat.family`; the server picker and "Create account" are hidden.
+- Account providers locked to `*.safechat.family` (every family's own homeserver); "Create account" is hidden
+  and the server screen refuses anything outside that rule.
+- Provisioning links (`https://safechat.family/app/login?…`, or the same behind the app's own URL scheme) accept
+  the control panel's sign-in code (`hs` + `token`) and redeem it with `m.login.token`; a used or expired code
+  falls back to the password form. Contract: `docs/client-login-links.md` in unicornops/family-chat.
 - Push notifications go through our own gateway at `push.safechat.family`.
 - PostHog analytics, Sentry and MapTiler are disabled (no keys are shipped).
 - Element's commercial licence offer (`LICENSE-COMMERCIAL`), the `Enterprise` submodule and the

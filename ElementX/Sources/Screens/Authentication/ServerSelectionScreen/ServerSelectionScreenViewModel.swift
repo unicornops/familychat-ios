@@ -1,6 +1,7 @@
 //
 // Copyright 2025 Element Creations Ltd.
 // Copyright 2022-2025 New Vector Ltd.
+// Copyright 2026 Unicorn Operations Ltd.
 //
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Element-Commercial.
 // Please see LICENSE files in the repository root for full details.
@@ -105,6 +106,15 @@ class ServerSelectionScreenViewModel: ServerSelectionScreenViewModelType, Server
         let userInput = state.bindings.homeserverAddress
         // People often enter their Matrix ID here, so use the server name from it when they do.
         let homeserverAddress = (try? serverNameFromUserId(userId: userInput)) ?? userInput
+        
+        // Family Chat: refuse servers outside the account providers before any network request, so neither a
+        // well-known lookup nor a password ever goes to a server we do not run.
+        guard appSettings.isAllowedAccountProvider(homeserverAddress) else {
+            MXLog.info("Homeserver not allowed by the account providers.")
+            showFooterMessage(UntranslatedL10n.screenChangeServerErrorNotAllowed(appSettings.exampleAccountProvider))
+            return
+        }
+        
         startLoading()
         
         switch await authenticationService.configure(for: homeserverAddress, flow: authenticationFlow) {

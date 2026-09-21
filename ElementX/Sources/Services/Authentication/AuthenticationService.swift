@@ -1,6 +1,7 @@
 //
 // Copyright 2025 Element Creations Ltd.
 // Copyright 2022-2025 New Vector Ltd.
+// Copyright 2026 Unicorn Operations Ltd.
 //
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Element-Commercial.
 // Please see LICENSE files in the repository root for full details.
@@ -18,6 +19,7 @@ class AuthenticationService: AuthenticationServiceProtocol {
     private let userSessionStore: UserSessionStoreProtocol
     private let classicAppManager: ClassicAppManagerProtocol?
     private let clientFactory: ClientFactoryProtocol
+    private let loginTokenExchanger: LoginTokenExchangerProtocol
     private let appSettings: AppSettings
     private let appHooks: AppHooks
     
@@ -34,6 +36,7 @@ class AuthenticationService: AuthenticationServiceProtocol {
          encryptionKeyProvider: EncryptionKeyProviderProtocol,
          classicAppManager: ClassicAppManagerProtocol?,
          clientFactory: ClientFactoryProtocol = ClientFactory(),
+         loginTokenExchanger: LoginTokenExchangerProtocol = LoginTokenExchanger(),
          appSettings: AppSettings,
          appHooks: AppHooks) {
         sessionDirectories = .init()
@@ -42,6 +45,7 @@ class AuthenticationService: AuthenticationServiceProtocol {
         self.userSessionStore = userSessionStore
         self.classicAppManager = classicAppManager
         self.clientFactory = clientFactory
+        self.loginTokenExchanger = loginTokenExchanger
         self.appSettings = appSettings
         self.appHooks = appHooks
         
@@ -174,6 +178,46 @@ class AuthenticationService: AuthenticationServiceProtocol {
             }
         } catch {
             MXLog.error("Failed logging in with error: \(error)")
+            return .failure(.failedLoggingIn)
+        }
+    }
+    
+    func loginWithToken(_ token: String, homeserverURL: URL, initialDeviceName: String?) async -> Result<UserSessionProtocol, AuthenticationServiceError> {
+        do {
+            // A fresh client for the homeserver named by the link: the sign-in code needs no server selection first.
+            let client = try await makeClient(homeserverAddress: homeserverURL.absoluteString)
+            
+            // The SDK has no `m.login.token` entry point; redeem the code ourselves and hand the credentials
+            // over as a restored session, exactly as a stored session is reopened at launch.
+            let credentials = try await loginTokenExchanger.exchange(token: token,
+                                                                     homeserverURL: homeserverURL,
+                                                                     initialDeviceName: initialDeviceName)
+            
+            if credentials.refreshToken != nil {
+                // Same rule as password login: a non-OAuth session with a refresh token cannot be restored later.
+                MXLog.warning("Refresh token found for a token login session, can't restore session, refusing.")
+                return .failure(.sessionTokenRefreshNotSupported)
+            }
+            
+            try await client.restoreSession(session: Session(accessToken: credentials.accessToken,
+                                                             refreshToken: nil,
+                                                             userId: credentials.userID,
+                                                             deviceId: credentials.deviceID,
+                                                             homeserverUrl: homeserverURL.absoluteString,
+                                                             oauthData: nil,
+                                                             slidingSyncVersion: .native))
+            
+            self.client = client
+            homeserverSubject.send(LoginHomeserver(address: homeserverURL.absoluteString, loginMode: .password))
+            
+            await verifyClientIfPossible(client: client)
+            return await userSession(for: client)
+        } catch LoginTokenExchangeError.rejected(let errcode) {
+            MXLog.error("Sign-in code rejected by the homeserver: \(errcode ?? "no errcode")")
+            return .failure(.invalidCredentials)
+        } catch {
+            // Never carries the token: the exchanger only reports HTTP status and errcode.
+            MXLog.error("Failed logging in with a sign-in code: \(error)")
             return .failure(.failedLoggingIn)
         }
     }
@@ -390,11 +434,13 @@ extension AuthenticationService {
         mock(classicAppManager: nil)
     }
     
-    static func mock(classicAppManager: ClassicAppManagerProtocol?) -> AuthenticationService {
+    static func mock(classicAppManager: ClassicAppManagerProtocol?,
+                     loginTokenExchanger: LoginTokenExchangerProtocol = LoginTokenExchangerMock()) -> AuthenticationService {
         AuthenticationService(userSessionStore: UserSessionStoreMock(.init()),
                               encryptionKeyProvider: EncryptionKeyProvider(),
                               classicAppManager: classicAppManager,
                               clientFactory: ClientFactoryMock(.init()),
+                              loginTokenExchanger: loginTokenExchanger,
                               appSettings: .volatile(),
                               appHooks: AppHooks())
     }

@@ -1,6 +1,7 @@
 //
 // Copyright 2025 Element Creations Ltd.
 // Copyright 2023-2025 New Vector Ltd.
+// Copyright 2026 Unicorn Operations Ltd.
 //
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Element-Commercial.
 // Please see LICENSE files in the repository root for full details.
@@ -71,10 +72,52 @@ enum AppRoute: Hashable {
 struct AccountProvisioningParameters: Hashable {
     let accountProvider: String
     let loginHint: String?
+    /// Family Chat sign-in code (`docs/client-login-links.md` in unicornops/family-chat): the bare host
+    /// (optionally `:port`) answering the client-server API, against which `token` is redeemed with
+    /// `m.login.token`. Always present together with `token`, never on its own.
+    let hs: String?
+    /// A single-use, short-lived login token minted by the control panel. Never logged, never persisted.
+    let token: String?
+    
+    init(accountProvider: String, loginHint: String?, hs: String? = nil, token: String? = nil) {
+        self.accountProvider = accountProvider
+        self.loginHint = loginHint
+        // Both or neither: a token without a host to redeem it against is useless, a host without a token is noise.
+        if let hs, let token, !hs.isEmpty, !token.isEmpty {
+            self.hs = hs
+            self.token = token
+        } else {
+            self.hs = nil
+            self.token = nil
+        }
+    }
     
     enum CodingKeys: String, CodingKey {
         case accountProvider = "account_provider"
         case loginHint = "login_hint"
+        case hs
+        case token
+    }
+    
+    /// Whether the link carries a sign-in code to redeem before falling back to the password flow.
+    var hasSignInCode: Bool { hs != nil && token != nil }
+    
+    /// The same parameters without the sign-in code (used when its homeserver is not an allowed account provider).
+    var withoutSignInCode: AccountProvisioningParameters {
+        AccountProvisioningParameters(accountProvider: accountProvider, loginHint: loginHint)
+    }
+    
+    /// The base URL to redeem the sign-in code against. The scheme is always https: a link names a host, never a URL.
+    var signInCodeHomeserverURL: URL? {
+        guard let hs else { return nil }
+        return URL(string: "https://\(hs)")
+    }
+}
+
+extension AccountProvisioningParameters: CustomStringConvertible {
+    /// Keeps the token out of every log line, including `MXLog.info("Handling app route: \(appRoute)")`.
+    var description: String {
+        "AccountProvisioningParameters(accountProvider: \(accountProvider), loginHint: \(loginHint ?? "nil"), hs: \(hs ?? "nil"), token: \(token == nil ? "nil" : "<redacted>"))"
     }
 }
 
@@ -187,6 +230,9 @@ private struct ElementWebURLParser: URLParser {
 }
 
 /// The parser for user provisioning links.
+/// The parser for account provisioning links: `https://safechat.family/app/login?…` as a universal link, or the
+/// same host and path behind the app's own URL scheme (`family.safechat.app://safechat.family/app/login?…`), which
+/// the website's fallback page uses. Both must behave identically, so the scheme is deliberately not checked.
 private struct AccountProvisioningURLParser: URLParser {
     let domain: String
     
@@ -200,7 +246,21 @@ private struct AccountProvisioningURLParser: URLParser {
         
         let loginHint = components.queryItems?.first { $0.name == AccountProvisioningParameters.CodingKeys.loginHint.rawValue }?.value
         
-        return .accountProvisioningLink(.init(accountProvider: serverName, loginHint: loginHint))
+        // A sign-in code: `hs` must be a bare hostname (optionally `:port`), never a URL, so a link cannot change
+        // the scheme or add a path to where the token is sent. Anything else drops the code and keeps the prefill.
+        let hs = components.queryItems?.first { $0.name == AccountProvisioningParameters.CodingKeys.hs.rawValue }?.value
+            .map { $0.trimmingCharacters(in: .whitespaces).lowercased() }
+            .flatMap { Self.isValidHostAndPort($0) ? $0 : nil }
+        let token = components.queryItems?.first { $0.name == AccountProvisioningParameters.CodingKeys.token.rawValue }?.value
+        
+        return .accountProvisioningLink(.init(accountProvider: serverName, loginHint: loginHint, hs: hs, token: token))
+    }
+    
+    /// DNS hostname labels, optionally followed by a port.
+    static func isValidHostAndPort(_ value: String) -> Bool {
+        let label = "[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?"
+        let pattern = "^\(label)(\\.\(label))*(:[0-9]{1,5})?$"
+        return value.range(of: pattern, options: .regularExpression) != nil
     }
 }
 

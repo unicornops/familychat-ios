@@ -1,6 +1,7 @@
 //
 // Copyright 2025 Element Creations Ltd.
 // Copyright 2022-2025 New Vector Ltd.
+// Copyright 2026 Unicorn Operations Ltd.
 //
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Element-Commercial.
 // Please see LICENSE files in the repository root for full details.
@@ -38,7 +39,9 @@ final class ServerSelectionScreenCoordinator: CoordinatorProtocol {
     init(parameters: ServerSelectionScreenCoordinatorParameters) {
         self.parameters = parameters
         
-        let mode: ServerSelectionScreenMode = if parameters.appSettings.allowOtherAccountProviders {
+        // Family Chat: a wildcard account provider (`*.safechat.family`) cannot be picked from a list, the user types
+        // their family's server and the view model checks it against the rule.
+        let mode: ServerSelectionScreenMode = if parameters.appSettings.allowOtherAccountProviders || parameters.appSettings.hasWildcardAccountProvider {
             .userInput
         } else {
             .picker(parameters.appSettings.accountProviders)

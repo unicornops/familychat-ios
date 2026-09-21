@@ -1,6 +1,7 @@
 //
 // Copyright 2025 Element Creations Ltd.
 // Copyright 2024-2025 New Vector Ltd.
+// Copyright 2026 Unicorn Operations Ltd.
 //
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Element-Commercial.
 // Please see LICENSE files in the repository root for full details.
@@ -130,12 +131,75 @@ struct AuthenticationServiceTests {
         #expect(!encryption.importSecretsBundleSecretsBundleCalled)
     }
     
+    @Test
+    mutating func signInCodeLogin() async throws {
+        // Given a family homeserver and a sign-in code it accepts.
+        let exchanger = LoginTokenExchangerMock(.init(result: .success(.mockAna)))
+        try await setup(serverAddress: "https://smith.safechat.family", loginTokenExchanger: exchanger)
+        
+        // When redeeming the code without any prior server configuration.
+        let result = await service.loginWithToken("syl_code", homeserverURL: "https://smith.safechat.family", initialDeviceName: "Family Chat iOS")
+        
+        // Then the code went to that homeserver, the credentials were restored into the client and a session was created.
+        switch result {
+        case .success:
+            #expect(exchanger.exchangeCallsCount == 1)
+            #expect(exchanger.exchangeReceivedArguments?.token == "syl_code")
+            #expect(exchanger.exchangeReceivedArguments?.homeserverURL == "https://smith.safechat.family")
+            #expect(exchanger.exchangeReceivedArguments?.initialDeviceName == "Family Chat iOS")
+            #expect(client.restoreSessionSessionCallsCount == 1)
+            #expect(client.restoreSessionSessionReceivedSession?.accessToken == "syt_access")
+            #expect(client.restoreSessionSessionReceivedSession?.userId == "@ana:smith.safechat.family")
+            #expect(client.restoreSessionSessionReceivedSession?.homeserverUrl == "https://smith.safechat.family")
+            #expect(client.loginUsernamePasswordInitialDeviceNameDeviceIdCallsCount == 0)
+            #expect(userSessionStore.userSessionForSessionDirectoriesPassphraseCallsCount == 1)
+            #expect(service.homeserver.value.address == "smith.safechat.family")
+        case .failure(let error):
+            Issue.record("Unexpected failure: \(error)")
+        }
+    }
+    
+    @Test
+    mutating func signInCodeRejected() async throws {
+        // Given a family homeserver that refuses the code (used or expired).
+        let exchanger = LoginTokenExchangerMock(.init(result: .failure(.rejected(errcode: "M_FORBIDDEN"))))
+        try await setup(serverAddress: "https://smith.safechat.family", loginTokenExchanger: exchanger)
+        
+        // When redeeming it.
+        let result = await service.loginWithToken("syl_code", homeserverURL: "https://smith.safechat.family", initialDeviceName: nil)
+        
+        // Then the failure is reported as invalid credentials and nothing was restored or stored.
+        try await #require(throws: AuthenticationServiceError.invalidCredentials) { try result.get() }
+        #expect(client.restoreSessionSessionCallsCount == 0)
+        #expect(userSessionStore.userSessionForSessionDirectoriesPassphraseCallsCount == 0)
+    }
+    
+    @Test
+    mutating func signInCodeUnreachableHomeserver() async throws {
+        // Given a family homeserver that cannot be reached.
+        let exchanger = LoginTokenExchangerMock(.init(result: .failure(.network(URLError(.notConnectedToInternet)))))
+        try await setup(serverAddress: "https://smith.safechat.family", loginTokenExchanger: exchanger)
+        
+        let result = await service.loginWithToken("syl_code", homeserverURL: "https://smith.safechat.family", initialDeviceName: nil)
+        
+        try await #require(throws: AuthenticationServiceError.failedLoggingIn) { try result.get() }
+        #expect(userSessionStore.userSessionForSessionDirectoriesPassphraseCallsCount == 0)
+    }
+    
     // MARK: - Helpers
     
     private mutating func setup(serverAddress: String = "matrix.org",
                                 classicAppAccounts: [ClassicAppAccount] = [],
-                                availableSecrets: ClassicAppAccount.AvailableSecrets = .complete) async throws {
-        let configuration: ClientFactoryMock.Configuration = .init()
+                                availableSecrets: ClassicAppAccount.AvailableSecrets = .complete,
+                                loginTokenExchanger: LoginTokenExchangerProtocol = LoginTokenExchangerMock()) async throws {
+        var configuration: ClientFactoryMock.Configuration = .init()
+        // A family homeserver, reached by its client-server URL as a sign-in link names it.
+        configuration.homeserverClients["https://smith.safechat.family"] = ClientSDKMock(.init(serverName: "smith.safechat.family",
+                                                                                              homeserverURL: "https://smith.safechat.family",
+                                                                                              slidingSyncVersion: .native,
+                                                                                              oAuthLoginURL: nil,
+                                                                                              supportsOAuthCreatePrompt: false,
+                                                                                              supportsPasswordLogin: true))
         let clientFactory = ClientFactoryMock(configuration)
         
         client = configuration.homeserverClients[serverAddress]
@@ -153,6 +217,7 @@ struct AuthenticationServiceTests {
                                         encryptionKeyProvider: encryptionKeyProvider,
                                         classicAppManager: classicAppManager,
                                         clientFactory: clientFactory,
+                                        loginTokenExchanger: loginTokenExchanger,
                                         appSettings: .volatile(),
                                         appHooks: AppHooks())
         

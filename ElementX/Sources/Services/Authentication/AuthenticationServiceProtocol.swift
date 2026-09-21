@@ -1,6 +1,7 @@
 //
 // Copyright 2025 Element Creations Ltd.
 // Copyright 2022-2025 New Vector Ltd.
+// Copyright 2026 Unicorn Operations Ltd.
 //
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Element-Commercial.
 // Please see LICENSE files in the repository root for full details.
@@ -53,6 +54,15 @@ protocol AuthenticationServiceProtocol: QRCodeLoginServiceProtocol {
     func loginWithOAuthCallback(_ callbackURL: URL) async -> Result<UserSessionProtocol, AuthenticationServiceError>
     /// Performs a password login using the current homeserver.
     func login(username: String, password: String, initialDeviceName: String?, deviceID: String?) async -> Result<UserSessionProtocol, AuthenticationServiceError>
+    
+    /// Family Chat: signs in with a single-use `m.login.token` from a control panel sign-in code, against the homeserver
+    /// the link named. Needs no prior `configure(for:flow:)` call. A used or expired code fails with `.invalidCredentials`.
+    ///
+    /// - Parameters:
+    ///   - token: the login token; never logged, never persisted.
+    ///   - homeserverURL: the `https://<hs>` base URL answering the client-server API for the family.
+    ///   - initialDeviceName: the device name shown in the user's session list.
+    func loginWithToken(_ token: String, homeserverURL: URL, initialDeviceName: String?) async -> Result<UserSessionProtocol, AuthenticationServiceError>
     
     /// Resets the current configuration requiring `configure(for:flow:)` to be called again.
     func reset()

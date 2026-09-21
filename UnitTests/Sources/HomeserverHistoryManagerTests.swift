@@ -1,5 +1,6 @@
 //
 // Copyright 2026 Element Creations Ltd.
+// Copyright 2026 Unicorn Operations Ltd.
 //
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Element-Commercial.
 // Please see LICENSE files in the repository root for full details.
@@ -123,6 +124,16 @@ struct HomeserverHistoryManagerTests {
         #expect(manager.server(matchingPrefix: "e") == nil)
         // and doesn't affect the other server entries
         #expect(manager.server(matchingPrefix: "m") == "matrix.org")
+    }
+    
+    @Test
+    func wildcardAccountProvidersAreNotSuggested() {
+        // Given a manager with no history and the default `*.safechat.family` rule.
+        let manager = createManager(withServerHistory: [])
+        
+        // Then the rule is never completed as if it were a server.
+        #expect(manager.server(matchingPrefix: "*") == nil)
+        #expect(manager.server(matchingPrefix: "*.") == nil)
     }
     
     private func createManager(withServerHistory history: [String]) -> HomeserverHistoryManager {

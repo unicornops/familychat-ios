@@ -1,5 +1,6 @@
 //
 // Copyright 2026 Element Creations Ltd.
+// Copyright 2026 Unicorn Operations Ltd.
 //
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Element-Commercial.
 // Please see LICENSE files in the repository root for full details.
@@ -67,7 +68,7 @@ class HomeserverHistoryManager {
     /// in all lowercase. This is the list that matches are made against.
     private func updateCachedServers() {
         let previous = appSettings.previousServers.map { $0.lowercased() }
-        let defaultProviders = appSettings.accountProviders.map { $0.lowercased() }
+        let defaultProviders = appSettings.pickableAccountProviders.map { $0.lowercased() }
         
         cachedServers = previous + defaultProviders
     }

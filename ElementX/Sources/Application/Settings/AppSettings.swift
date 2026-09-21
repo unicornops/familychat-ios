@@ -1,6 +1,7 @@
 //
 // Copyright 2025 Element Creations Ltd.
 // Copyright 2022-2025 New Vector Ltd.
+// Copyright 2026 Unicorn Operations Ltd.
 //
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Element-Commercial.
 // Please see LICENSE files in the repository root for full details.
@@ -141,7 +142,10 @@ final nonisolated class AppSettings: @unchecked Sendable {
     ///
     /// Account provider is the friendly term for the server name. It should not contain an `https` prefix and should
     /// match the last part of the user ID. For example `example.com` and not `https://matrix.example.com`.
-    private(set) var accountProviders = ["safechat.family"]
+    ///
+    /// Family Chat: an entry starting with `*.` matches every subdomain of its suffix (one family homeserver each,
+    /// `<slug>.safechat.family`). See `AppSettings+AccountProviders.swift` for the matching rules.
+    private(set) var accountProviders = ["*.safechat.family"]
     /// Whether or not the user is allowed to manually enter their own account provider or must select from one of `defaultAccountProviders`.
     private(set) var allowOtherAccountProviders = false
     /// Whether the components surrounding the app brand/logo should be hidden or not
@@ -189,7 +193,8 @@ final nonisolated class AppSettings: @unchecked Sendable {
     var previousServers: [String]
     
     var defaultServer: String {
-        previousServers.first ?? accountProviders[0]
+        // A wildcard entry is a rule, not a server: never offer it as the address to sign in to.
+        previousServers.first ?? pickableAccountProviders.first ?? ""
     }
     
     // MARK: - Security

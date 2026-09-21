@@ -1,6 +1,7 @@
 //
 // Copyright 2025 Element Creations Ltd.
 // Copyright 2022-2025 New Vector Ltd.
+// Copyright 2026 Unicorn Operations Ltd.
 //
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Element-Commercial.
 // Please see LICENSE files in the repository root for full details.
@@ -8,16 +9,36 @@
 
 import SwiftUI
 
-enum AuthenticationStartScreenViewModelAction: Equatable {
+enum AuthenticationStartScreenViewModelAction {
     case loginWithQR
     case login
     case register
     
     case loginDirectlyWithOAuth(data: OAuthAuthorizationDataProxy, window: UIWindow)
     case loginDirectlyWithPassword(loginHint: String?)
+    /// Family Chat: the sign-in code from the provisioning link was redeemed, the user is signed in.
+    case signedIn(UserSessionProtocol)
     
     case reportProblem
     case developerOptions
+}
+
+extension AuthenticationStartScreenViewModelAction: Equatable {
+    static func == (lhs: AuthenticationStartScreenViewModelAction, rhs: AuthenticationStartScreenViewModelAction) -> Bool {
+        switch (lhs, rhs) {
+        case (.loginWithQR, .loginWithQR), (.login, .login), (.register, .register),
+             (.reportProblem, .reportProblem), (.developerOptions, .developerOptions):
+            true
+        case (.loginDirectlyWithOAuth(let lhsData, let lhsWindow), .loginDirectlyWithOAuth(let rhsData, let rhsWindow)):
+            lhsData == rhsData && lhsWindow == rhsWindow
+        case (.loginDirectlyWithPassword(let lhsHint), .loginDirectlyWithPassword(let rhsHint)):
+            lhsHint == rhsHint
+        case (.signedIn(let lhsSession), .signedIn(let rhsSession)):
+            lhsSession.clientProxy.userID == rhsSession.clientProxy.userID
+        default:
+            false
+        }
+    }
 }
 
 struct AuthenticationStartScreenViewState: BindableState {
@@ -53,6 +74,10 @@ struct AuthenticationStartScreenViewStateBindings {
 
 enum AuthenticationStartScreenAlertType {
     case genericError
+    /// The sign-in code was used already or has expired.
+    case signInCodeRejected
+    /// The sign-in code could not be redeemed for another reason (server unreachable, unexpected answer).
+    case signInCodeFailed
 }
 
 enum AuthenticationStartScreenViewAction {
