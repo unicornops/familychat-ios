@@ -87,7 +87,7 @@ private final class LoginRequestRecorder: @unchecked Sendable {
     var bodies: [Data] = []
 }
 
-private final class StubbedLoginEndpoint: URLProtocol {
+private nonisolated final class StubbedLoginEndpoint: URLProtocol {
     nonisolated(unsafe) static var recorder = LoginRequestRecorder()
     nonisolated(unsafe) static var statusCode = 200
     nonisolated(unsafe) static var body = Data()
