@@ -16,6 +16,7 @@ class AuthenticationStartScreenViewModel: AuthenticationStartScreenViewModelType
     private let authenticationService: AuthenticationServiceProtocol
     private let provisioningParameters: AccountProvisioningParameters?
     private let appMediator: AppMediatorProtocol
+    private let appSettings: AppSettings
     private let userIndicatorController: UserIndicatorControllerProtocol
     
     private let canReportProblem: Bool
@@ -37,12 +38,16 @@ class AuthenticationStartScreenViewModel: AuthenticationStartScreenViewModelType
         self.authenticationService = authenticationService
         self.provisioningParameters = provisioningParameters
         self.appMediator = appMediator
+        self.appSettings = appSettings
         self.userIndicatorController = userIndicatorController
         canReportProblem = isBugReportServiceEnabled
         
         let isQRCodeScanningSupported = !ProcessInfo.processInfo.isiOSAppOnMac
         let classicAppAccountProvider = authenticationService.classicAppAccount?.serverName
         let isClassicAppAccountAllowed = classicAppAccountProvider.map { appSettings.isAllowedAccountProvider($0) } ?? false
+        // A single wildcard rule (`*.safechat.family`) is not a server to sign in to: the user types their own.
+        let pickableProviders = appSettings.pickableAccountProviders
+        let lockedServerName = pickableProviders.count == 1 && !appSettings.hasWildcardAccountProvider ? pickableProviders[0] : nil
         
         let initialViewState = if let provisioningParameters, !appSettings.allowOtherAccountProviders {
             // Family Chat: a provisioning link for an allowed family server behaves as it does upstream, with
@@ -55,9 +60,7 @@ class AuthenticationStartScreenViewModel: AuthenticationStartScreenViewModelType
         } else if !appSettings.allowOtherAccountProviders {
             // We don't show the create account button when custom providers are disallowed.
             // The assumption here being that if you're running a custom app, your users will already be created.
-            // A single wildcard rule (`*.safechat.family`) is not a server to sign in to: the user types their own.
-            let pickableProviders = appSettings.pickableAccountProviders
-            AuthenticationStartScreenViewState(serverName: pickableProviders.count == 1 && !appSettings.hasWildcardAccountProvider ? pickableProviders[0] : nil,
+            AuthenticationStartScreenViewState(serverName: lockedServerName,
                                                showCreateAccountButton: false,
                                                showQRCodeLoginButton: isQRCodeScanningSupported,
                                                classicAppMode: isClassicAppAccountAllowed ? authenticationService.classicAppAccount.map { .welcomeBack($0) } : nil,
