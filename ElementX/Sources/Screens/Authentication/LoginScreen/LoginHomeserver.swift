@@ -1,6 +1,7 @@
 //
 // Copyright 2025 Element Creations Ltd.
 // Copyright 2022-2025 New Vector Ltd.
+// Copyright 2026 Unicorn Operations Ltd.
 //
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Element-Commercial.
 // Please see LICENSE files in the repository root for full details.
@@ -17,7 +18,10 @@ struct LoginHomeserver: Equatable {
     
     /// Creates a new homeserver value.
     init(address: String, loginMode: LoginMode) {
-        let address = Self.sanitized(address).components(separatedBy: "://").last ?? address
+        // Family Chat: with a wildcard account provider there is no default server, and an empty address must stay
+        // empty rather than be sanitised into `https:`.
+        let isEmpty = address.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        let address = isEmpty ? "" : Self.sanitized(address).components(separatedBy: "://").last ?? address
         
         self.address = address
         self.loginMode = loginMode
