@@ -20,6 +20,20 @@ internal nonisolated enum UntranslatedL10n {
   }
   /// Search
   internal static var screenHomeTabSearch: String { return UntranslatedL10n.tr("Untranslated", "screen_home_tab_search") }
+  /// That sign-in code is for a different account than the one the link named, so you have not been signed in. Ask a parent for a new code, or sign in with your password.
+  internal static var screenOnboardingSignInCodeAccountMismatchMessage: String { return UntranslatedL10n.tr("Untranslated", "screen_onboarding_sign_in_code_account_mismatch_message") }
+  /// To use this sign-in code for another account, sign out first and then open the code again.
+  internal static var screenOnboardingSignInCodeAlreadySignedInMessage: String { return UntranslatedL10n.tr("Untranslated", "screen_onboarding_sign_in_code_already_signed_in_message") }
+  /// Only continue if this is your account and you asked a parent for this sign-in code.
+  internal static var screenOnboardingSignInCodeConfirmMessage: String { return UntranslatedL10n.tr("Untranslated", "screen_onboarding_sign_in_code_confirm_message") }
+  /// Sign in as %1$@?
+  internal static func screenOnboardingSignInCodeConfirmTitle(_ p1: Any) -> String {
+    return UntranslatedL10n.tr("Untranslated", "screen_onboarding_sign_in_code_confirm_title", String(describing: p1))
+  }
+  /// Sign in to %1$@?
+  internal static func screenOnboardingSignInCodeConfirmTitleNoHint(_ p1: Any) -> String {
+    return UntranslatedL10n.tr("Untranslated", "screen_onboarding_sign_in_code_confirm_title_no_hint", String(describing: p1))
+  }
   /// Your family's server could not be reached with this sign-in code. Check your connection and try a new code, or sign in with your password.
   internal static var screenOnboardingSignInCodeFailedMessage: String { return UntranslatedL10n.tr("Untranslated", "screen_onboarding_sign_in_code_failed_message") }
   /// Signing you in…

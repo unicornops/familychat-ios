@@ -36,6 +36,8 @@ enum AuthenticationServiceError: Error, Equatable {
     case accountDeactivated
     case failedLoggingIn
     case sessionTokenRefreshNotSupported
+    /// Family Chat: a sign-in code signed in to another account than the link named. The new session was discarded.
+    case signInCodeAccountMismatch
 }
 
 protocol AuthenticationServiceProtocol: QRCodeLoginServiceProtocol {
@@ -57,12 +59,26 @@ protocol AuthenticationServiceProtocol: QRCodeLoginServiceProtocol {
     
     /// Family Chat: signs in with a single-use `m.login.token` from a control panel sign-in code, against the homeserver
     /// the link named. Needs no prior `configure(for:flow:)` call. A used or expired code fails with `.invalidCredentials`.
+    /// Only one code is redeemed at a time: a call made while another is in flight fails with `.failedLoggingIn`.
+    ///
+    /// The session must belong to the account the link named, or it is logged out again and the call fails with
+    /// `.signInCodeAccountMismatch`: `expectedUserID` when the link had a login hint, otherwise any account on
+    /// `accountProvider`.
     ///
     /// - Parameters:
     ///   - token: the login token; never logged, never persisted.
     ///   - homeserverURL: the `https://<hs>` base URL answering the client-server API for the family.
+    ///   - accountProvider: the family's server name, the link's `account_provider`.
+    ///   - expectedUserID: the Matrix ID from the link's login hint, if any.
     ///   - initialDeviceName: the device name shown in the user's session list.
-    func loginWithToken(_ token: String, homeserverURL: URL, initialDeviceName: String?) async -> Result<UserSessionProtocol, AuthenticationServiceError>
+    func loginWithToken(_ token: String,
+                        homeserverURL: URL,
+                        accountProvider: String,
+                        expectedUserID: String?,
+                        initialDeviceName: String?) async -> Result<UserSessionProtocol, AuthenticationServiceError>
+    
+    /// Family Chat: whether `loginWithToken` is in flight, during which new provisioning links are ignored.
+    var isRedeemingSignInCode: Bool { get }
     
     /// Resets the current configuration requiring `configure(for:flow:)` to be called again.
     func reset()

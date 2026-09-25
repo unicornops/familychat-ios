@@ -90,8 +90,9 @@ class AuthenticationStartScreenViewModel: AuthenticationStartScreenViewModelType
             .store(in: &cancellables)
         
         if let provisioningParameters, provisioningParameters.hasSignInCode {
-            // A control panel sign-in code is redeemed straight away; the screen underneath is the password fallback.
-            signInCodeTask = Task { await self.loginWithSignInCode(provisioningParameters) }
+            // A control panel sign-in code is only redeemed once the user confirms the account it signs in to, so a
+            // link can't quietly sign them in to someone else's account. The screen underneath is the password fallback.
+            confirmSignInCode(provisioningParameters)
         }
     }
     
@@ -130,13 +131,36 @@ class AuthenticationStartScreenViewModel: AuthenticationStartScreenViewModelType
     
     @CancellableTask private var signInCodeTask: Task<Void, Never>?
     
+    /// Asks the user to confirm the account a sign-in code signs in to before redeeming it. Cancelling drops the code
+    /// and leaves the usual "Sign in to …" button for the password sign-in.
+    private func confirmSignInCode(_ provisioningParameters: AccountProvisioningParameters) {
+        let title = if let userID = provisioningParameters.loginHintUserID {
+            UntranslatedL10n.screenOnboardingSignInCodeConfirmTitle(userID)
+        } else {
+            UntranslatedL10n.screenOnboardingSignInCodeConfirmTitleNoHint(provisioningParameters.accountProvider)
+        }
+        state.bindings.alertInfo = AlertInfo(id: .signInCodeConfirmation,
+                                             title: title,
+                                             message: UntranslatedL10n.screenOnboardingSignInCodeConfirmMessage,
+                                             primaryButton: .init(title: L10n.actionCancel, role: .cancel) {
+                                                 MXLog.info("Sign-in code declined by the user.")
+                                             },
+                                             secondaryButton: .init(title: L10n.actionContinue) { [weak self] in
+                                                 self?.redeemSignInCode(provisioningParameters)
+                                             })
+    }
+    
     /// Redeems the link's single-use code against `https://<hs>`. On success the flow completes; on any failure the user
     /// is told why and continues with the usual pre-filled password sign-in. The token goes to the authentication service
     /// and nowhere else.
-    private func loginWithSignInCode(_ provisioningParameters: AccountProvisioningParameters) async {
+    private func redeemSignInCode(_ provisioningParameters: AccountProvisioningParameters) {
         guard let token = provisioningParameters.token,
               let hs = provisioningParameters.hs,
-              let homeserverURL = provisioningParameters.signInCodeHomeserverURL else { return }
+              let homeserverURL = provisioningParameters.signInCodeHomeserverURL else {
+            MXLog.error("Sign-in code refused: the link's homeserver is not usable.")
+            displaySignInCodeError(.signInCodeFailed)
+            return
+        }
         
         // Defence in depth: the flow coordinator already strips codes for hosts outside the account providers.
         guard appSettings.isAllowedAccountProvider(hs) else {
@@ -145,22 +169,40 @@ class AuthenticationStartScreenViewModel: AuthenticationStartScreenViewModelType
             return
         }
         
-        startLoading(label: UntranslatedL10n.screenOnboardingSignInCodeLoading)
-        defer { stopLoading() }
+        guard !authenticationService.isRedeemingSignInCode else {
+            MXLog.warning("A sign-in code is already being redeemed, ignoring this one.")
+            return
+        }
         
-        switch await authenticationService.loginWithToken(token, homeserverURL: homeserverURL, initialDeviceName: UIDevice.current.initialDeviceName) {
-        case .success(let userSession):
-            actionsSubject.send(.signedIn(userSession))
-        case .failure(.invalidCredentials):
-            displaySignInCodeError(.signInCodeRejected)
-        case .failure:
-            displaySignInCodeError(.signInCodeFailed)
+        startLoading(label: UntranslatedL10n.screenOnboardingSignInCodeLoading)
+        
+        // The service is captured rather than `self`, so the screen isn't kept alive by an in-flight redemption.
+        signInCodeTask = Task { [weak self, authenticationService, userIndicatorController, loadingIndicatorID] in
+            let result = await authenticationService.loginWithToken(token,
+                                                                    homeserverURL: homeserverURL,
+                                                                    accountProvider: provisioningParameters.accountProvider,
+                                                                    expectedUserID: provisioningParameters.loginHintUserID,
+                                                                    initialDeviceName: UIDevice.current.initialDeviceName)
+            userIndicatorController.retractIndicatorWithId(loadingIndicatorID)
+            guard let self else { return }
+            
+            switch result {
+            case .success(let userSession):
+                actionsSubject.send(.signedIn(userSession))
+            case .failure(.invalidCredentials):
+                displaySignInCodeError(.signInCodeRejected)
+            case .failure(.signInCodeAccountMismatch):
+                displaySignInCodeError(.signInCodeAccountMismatch)
+            case .failure:
+                displaySignInCodeError(.signInCodeFailed)
+            }
         }
     }
     
     private func displaySignInCodeError(_ alertType: AuthenticationStartScreenAlertType) {
         let message = switch alertType {
         case .signInCodeRejected: UntranslatedL10n.screenOnboardingSignInCodeRejectedMessage
+        case .signInCodeAccountMismatch: UntranslatedL10n.screenOnboardingSignInCodeAccountMismatchMessage
         default: UntranslatedL10n.screenOnboardingSignInCodeFailedMessage
         }
         state.bindings.alertInfo = AlertInfo(id: alertType,

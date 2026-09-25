@@ -34,6 +34,10 @@ protocol LoginTokenExchangerProtocol {
     ///   - homeserverURL: the `https://<hs>` base URL of the homeserver named by the link.
     ///   - initialDeviceName: the device name shown in the user's session list.
     func exchange(token: String, homeserverURL: URL, initialDeviceName: String?) async throws -> LoginTokenCredentials
+    
+    /// Best effort `POST /_matrix/client/v3/logout` for a session from `exchange` that is not going to be used, so it
+    /// doesn't linger as a signed-in device. Never throws; failures are only logged.
+    func logout(accessToken: String, homeserverURL: URL) async
 }
 
 struct LoginTokenExchanger: LoginTokenExchangerProtocol {
@@ -52,7 +56,8 @@ struct LoginTokenExchanger: LoginTokenExchangerProtocol {
         
         let (data, response): (Data, URLResponse)
         do {
-            (data, response) = try await session.data(for: request)
+            // Never follow a redirect: a 307/308 would re-POST the token to wherever the answer points.
+            (data, response) = try await session.data(for: request, delegate: RedirectRefusingTaskDelegate.shared)
         } catch {
             MXLog.warning("Sign-in code exchange: homeserver unreachable.")
             throw LoginTokenExchangeError.network(error)
@@ -77,6 +82,22 @@ struct LoginTokenExchanger: LoginTokenExchangerProtocol {
                                      accessToken: loginResponse.accessToken,
                                      deviceID: loginResponse.deviceID,
                                      refreshToken: loginResponse.refreshToken)
+    }
+    
+    func logout(accessToken: String, homeserverURL: URL) async {
+        var request = URLRequest(url: homeserverURL.appending(path: "_matrix/client/v3/logout"))
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+        request.httpBody = Data("{}".utf8)
+        
+        do {
+            let (_, response) = try await session.data(for: request, delegate: RedirectRefusingTaskDelegate.shared)
+            let statusCode = (response as? HTTPURLResponse)?.statusCode
+            MXLog.info("Discarded the sign-in code's session: HTTP \(statusCode.map(String.init) ?? "?")")
+        } catch {
+            MXLog.warning("Could not discard the sign-in code's session, the homeserver is unreachable.")
+        }
     }
     
     // MARK: - Wire format
@@ -110,5 +131,19 @@ struct LoginTokenExchanger: LoginTokenExchangerProtocol {
     private struct ErrorResponse: Decodable {
         let errcode: String?
         let error: String?
+    }
+}
+
+/// Refuses every HTTP redirect, so a request carrying a credential is only ever sent to the URL it was made for. The
+/// redirect response itself is then delivered as the answer, which the caller treats as a failure.
+final nonisolated class RedirectRefusingTaskDelegate: NSObject, URLSessionTaskDelegate, Sendable {
+    static let shared = RedirectRefusingTaskDelegate()
+    
+    func urlSession(_ session: URLSession,
+                    task: URLSessionTask,
+                    willPerformHTTPRedirection response: HTTPURLResponse,
+                    newRequest request: URLRequest) async -> URLRequest? {
+        MXLog.warning("Refusing an HTTP \(response.statusCode) redirect for a sign-in request.")
+        return nil
     }
 }

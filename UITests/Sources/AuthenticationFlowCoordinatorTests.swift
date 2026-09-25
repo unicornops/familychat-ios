@@ -164,6 +164,12 @@ class AuthenticationFlowCoordinatorUITests: XCTestCase {
         // Given a provisioning link whose sign-in code the homeserver refuses (used or expired).
         let app = Application.launch(.signInCodeAuthenticationFlow)
         
+        // Then the user is first asked to confirm the account the code signs in to.
+        let confirmButton = app.buttons[A11yIdentifiers.alertInfo.secondaryButton]
+        XCTAssertTrue(confirmButton.waitForExistence(timeout: 5.0), "The sign-in code's account should be confirmed first.")
+        XCTAssertTrue(app.staticTexts["Sign in as @alice:example.com?"].exists)
+        confirmButton.tap()
+        
         // Then the user is told the code cannot be used.
         let alertButton = app.buttons[A11yIdentifiers.alertInfo.primaryButton]
         XCTAssertTrue(alertButton.waitForExistence(timeout: 5.0), "The rejected sign-in code should be explained.")

@@ -129,18 +129,37 @@ class AuthenticationFlowCoordinator: FlowCoordinatorProtocol {
         switch appRoute {
         case .accountProvisioningLink(let linkParameters):
             // Family Chat: links are honoured for any allowed account provider (`*.safechat.family`), not only when
-            // arbitrary providers are allowed as upstream requires.
-            guard appSettings.isAllowedAccountProvider(linkParameters.accountProvider) else {
+            // arbitrary providers are allowed as upstream requires. From here on only the canonical host that was
+            // checked is used, never the link's raw value.
+            guard let accountProvider = appSettings.allowedAccountProvider(linkParameters.accountProvider) else {
                 MXLog.error("Provisioning link for a disallowed account provider, ignoring.")
                 return
             }
             
+            // A sign-in code is being redeemed: replacing the screen now would race it (two clients, one session
+            // directory), so the new link is ignored. The user can open it again once this sign-in finishes.
+            guard !authenticationService.isRedeemingSignInCode else {
+                MXLog.warning("Ignoring a provisioning link while a sign-in code is being redeemed.")
+                return
+            }
+            
+            // A login hint for another server than the link's account provider is dropped: it would lead the
+            // password form (and the sign-in code's account check) to a server the link didn't name.
+            var loginHint = linkParameters.loginHint
+            if let hintedUserID = linkParameters.loginHintUserID,
+               AccountProvisioningParameters.serverName(ofUserID: hintedUserID) != accountProvider.lowercased() {
+                MXLog.error("Provisioning link's login hint names another server than its account provider, dropping the hint.")
+                loginHint = nil
+            }
+            
             // A sign-in code is only redeemed against an allowed homeserver; otherwise the link degrades to the
             // plain account provider + login hint prefill and the token goes nowhere.
-            var provisioningParameters = linkParameters
-            if let hs = linkParameters.hs, !appSettings.isAllowedAccountProvider(hs) {
+            let provisioningParameters = AccountProvisioningParameters(accountProvider: accountProvider,
+                                                                       loginHint: loginHint,
+                                                                       hs: linkParameters.hs.flatMap(appSettings.allowedAccountProvider),
+                                                                       token: linkParameters.token)
+            if linkParameters.hasSignInCode, !provisioningParameters.hasSignInCode {
                 MXLog.error("Provisioning link's sign-in code names a disallowed homeserver, dropping the code.")
-                provisioningParameters = linkParameters.withoutSignInCode
             }
             
             if stateMachine.state != .startScreen {
@@ -478,7 +497,8 @@ class AuthenticationFlowCoordinator: FlowCoordinatorProtocol {
     private func userHasSignedIn(userSession: UserSessionProtocol) {
         delegate?.authenticationFlowCoordinator(didLoginWithSession: userSession)
         
+        // Family Chat: remember the bare host, never an `https://…` URL, so it can be offered and checked again.
         let newServer = authenticationService.homeserver.value.address
-        homeserverHistoryManager.addServerToList(newServer)
+        homeserverHistoryManager.addServerToList(AppSettings.canonicalAccountProviderHost(newServer) ?? newServer)
     }
 }

@@ -77,6 +77,56 @@ struct LoginTokenExchangerTests {
             Issue.record("Unexpected error: \(error)")
         }
     }
+    
+    @Test(.timeLimit(.minutes(1)))
+    func redirectsAreNeverFollowed() async throws {
+        // Given a homeserver that answers the login with a 307 elsewhere, which would re-POST the token there.
+        let recorder = StubbedLoginEndpoint.install(statusCode: 200, body: """
+        {"user_id":"@ana:smith.safechat.family","access_token":"syt_access","device_id":"DEVICE1"}
+        """)
+        StubbedLoginEndpoint.redirectLocation = URL(string: "https://evil.example/_matrix/client/v3/login")
+        let exchanger = LoginTokenExchanger(session: StubbedLoginEndpoint.session)
+        
+        // Then the exchange fails.
+        await #expect(throws: LoginTokenExchangeError.self) {
+            try await exchanger.exchange(token: token, homeserverURL: homeserverURL, initialDeviceName: nil)
+        }
+        
+        // And the token went to the homeserver only, never to the redirect's target.
+        #expect(recorder.requests.count == 1)
+        #expect(recorder.requests.allSatisfy { $0.url?.host() == "smith.safechat.family" })
+    }
+    
+    @Test
+    func theTaskDelegateRefusesRedirects() async throws {
+        let url = try #require(URL(string: "https://smith.safechat.family/_matrix/client/v3/login"))
+        let evilURL = try #require(URL(string: "https://evil.example/"))
+        let response = try #require(HTTPURLResponse(url: url, statusCode: 308, httpVersion: nil, headerFields: ["Location": evilURL.absoluteString]))
+        let task = URLSession(configuration: .ephemeral).dataTask(with: url)
+        
+        let newRequest = await RedirectRefusingTaskDelegate.shared.urlSession(URLSession.shared,
+                                                                              task: task,
+                                                                              willPerformHTTPRedirection: response,
+                                                                              newRequest: URLRequest(url: evilURL))
+        #expect(newRequest == nil)
+    }
+    
+    @Test
+    func logoutSendsTheAccessTokenToTheHomeserver() async throws {
+        // Given a homeserver that accepts the logout.
+        let recorder = StubbedLoginEndpoint.install(statusCode: 200, body: "{}")
+        let exchanger = LoginTokenExchanger(session: StubbedLoginEndpoint.session)
+        
+        // When discarding a session.
+        await exchanger.logout(accessToken: "syt_access", homeserverURL: homeserverURL)
+        
+        // Then exactly one authenticated logout went to the homeserver.
+        let request = try #require(recorder.requests.first)
+        #expect(recorder.requests.count == 1)
+        #expect(request.url == URL(string: "https://smith.safechat.family/_matrix/client/v3/logout"))
+        #expect(request.httpMethod == "POST")
+        #expect(request.value(forHTTPHeaderField: "Authorization") == "Bearer syt_access")
+    }
 }
 
 // MARK: - Stubbed endpoint
@@ -91,6 +141,8 @@ private final nonisolated class StubbedLoginEndpoint: URLProtocol {
     nonisolated(unsafe) static var recorder = LoginRequestRecorder()
     nonisolated(unsafe) static var statusCode = 200
     nonisolated(unsafe) static var body = Data()
+    /// When set, the first request is answered with a 307 to this URL instead.
+    nonisolated(unsafe) static var redirectLocation: URL?
     
     static var session: URLSession {
         let configuration = URLSessionConfiguration.ephemeral
@@ -104,6 +156,7 @@ private final nonisolated class StubbedLoginEndpoint: URLProtocol {
         self.recorder = recorder
         self.statusCode = statusCode
         self.body = Data(body.utf8)
+        redirectLocation = nil
         return recorder
     }
     
@@ -118,6 +171,18 @@ private final nonisolated class StubbedLoginEndpoint: URLProtocol {
     override func startLoading() {
         Self.recorder.requests.append(request)
         Self.recorder.bodies.append(request.httpBody ?? request.httpBodyStream.map(Self.read) ?? Data())
+        
+        if let redirectLocation = Self.redirectLocation, let url = request.url, url != redirectLocation,
+           let redirectResponse = HTTPURLResponse(url: url, statusCode: 307, httpVersion: nil, headerFields: ["Location": redirectLocation.absoluteString]) {
+            var redirectRequest = request
+            redirectRequest.url = redirectLocation
+            client?.urlProtocol(self, wasRedirectedTo: redirectRequest, redirectResponse: redirectResponse)
+            // Refused redirects deliver the 3xx itself as the answer.
+            client?.urlProtocol(self, didReceive: redirectResponse, cacheStoragePolicy: .notAllowed)
+            client?.urlProtocol(self, didLoad: Data())
+            client?.urlProtocolDidFinishLoading(self)
+            return
+        }
         
         guard let url = request.url,
               let response = HTTPURLResponse(url: url, statusCode: Self.statusCode, httpVersion: nil, headerFields: ["Content-Type": "application/json"]) else {

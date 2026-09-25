@@ -74,6 +74,10 @@ struct AuthenticationStartScreenViewStateBindings {
 
 enum AuthenticationStartScreenAlertType {
     case genericError
+    /// Asks the user to confirm the account a sign-in code signs in to before redeeming it.
+    case signInCodeConfirmation
+    /// The sign-in code signed in to another account than the link named; that session was discarded.
+    case signInCodeAccountMismatch
     /// The sign-in code was used already or has expired.
     case signInCodeRejected
     /// The sign-in code could not be redeemed for another reason (server unreachable, unexpected answer).

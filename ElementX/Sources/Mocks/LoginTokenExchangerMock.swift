@@ -17,6 +17,10 @@ final class LoginTokenExchangerMock: LoginTokenExchangerProtocol, @unchecked Sen
     
     private(set) var exchangeCallsCount = 0
     private(set) var exchangeReceivedArguments: (token: String, homeserverURL: URL, initialDeviceName: String?)?
+    private(set) var logoutCallsCount = 0
+    private(set) var logoutReceivedArguments: (accessToken: String, homeserverURL: URL)?
+    /// Called at the start of `exchange`, before it answers; lets a test act while a redemption is in flight.
+    var exchangeWillAnswer: (() async -> Void)?
     
     init(_ configuration: Configuration = .init()) {
         self.configuration = configuration
@@ -25,12 +29,22 @@ final class LoginTokenExchangerMock: LoginTokenExchangerProtocol, @unchecked Sen
     func exchange(token: String, homeserverURL: URL, initialDeviceName: String?) async throws -> LoginTokenCredentials {
         exchangeCallsCount += 1
         exchangeReceivedArguments = (token, homeserverURL, initialDeviceName)
+        await exchangeWillAnswer?()
         return try configuration.result.get()
+    }
+    
+    func logout(accessToken: String, homeserverURL: URL) async {
+        logoutCallsCount += 1
+        logoutReceivedArguments = (accessToken, homeserverURL)
     }
 }
 
 extension LoginTokenCredentials {
     static var mockAna: LoginTokenCredentials {
-        LoginTokenCredentials(userID: "@ana:smith.safechat.family", accessToken: "syt_access", deviceID: "DEVICE1", refreshToken: nil)
+        mock(userID: "@ana:smith.safechat.family")
+    }
+    
+    static func mock(userID: String, refreshToken: String? = nil) -> LoginTokenCredentials {
+        LoginTokenCredentials(userID: userID, accessToken: "syt_access", deviceID: "DEVICE1", refreshToken: refreshToken)
     }
 }
