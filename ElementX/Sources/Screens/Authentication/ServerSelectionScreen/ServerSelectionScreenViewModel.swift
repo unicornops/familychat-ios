@@ -1,6 +1,7 @@
 //
 // Copyright 2025 Element Creations Ltd.
 // Copyright 2022-2025 New Vector Ltd.
+// Copyright 2026 Unicorn Operations Ltd.
 //
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Element-Commercial.
 // Please see LICENSE files in the repository root for full details.
@@ -48,7 +49,12 @@ class ServerSelectionScreenViewModel: ServerSelectionScreenViewModelType, Server
             homeserverAddress = authenticationService.homeserver.value.address
         }
         let bindings = ServerSelectionScreenBindings(homeserverAddress: homeserverAddress)
-        super.init(initialViewState: ServerSelectionScreenViewState(mode: mode, authenticationFlow: authenticationFlow, bindings: bindings))
+        var viewState = ServerSelectionScreenViewState(mode: mode, authenticationFlow: authenticationFlow, bindings: bindings)
+        if !appSettings.allowOtherAccountProviders, appSettings.hasWildcardAccountProvider {
+            // Family Chat: show what a family server looks like (`yourfamily.safechat.family`) in the empty field.
+            viewState.textFieldPlaceholder = appSettings.exampleAccountProvider
+        }
+        super.init(initialViewState: viewState)
         
         context.viewState.textFieldAdapter.keystrokePublisher
             .sink { [weak self] in
@@ -104,7 +110,17 @@ class ServerSelectionScreenViewModel: ServerSelectionScreenViewModelType, Server
     private func configureHomeserver() async {
         let userInput = state.bindings.homeserverAddress
         // People often enter their Matrix ID here, so use the server name from it when they do.
-        let homeserverAddress = (try? serverNameFromUserId(userId: userInput)) ?? userInput
+        let serverNameOrAddress = (try? serverNameFromUserId(userId: userInput)) ?? userInput
+        
+        // Family Chat: refuse servers outside the account providers before any network request, so neither a
+        // well-known lookup nor a password ever goes to a server we do not run. Only the canonical host that was
+        // checked goes on to the SDK, never the raw input, which the SDK's URL parser could read differently.
+        guard let homeserverAddress = appSettings.allowedAccountProvider(serverNameOrAddress) else {
+            MXLog.info("Homeserver not allowed by the account providers.")
+            showFooterMessage(UntranslatedL10n.screenChangeServerErrorNotAllowed(appSettings.exampleAccountProvider))
+            return
+        }
+        
         startLoading()
         
         switch await authenticationService.configure(for: homeserverAddress, flow: authenticationFlow) {

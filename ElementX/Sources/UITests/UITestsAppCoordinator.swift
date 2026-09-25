@@ -1,6 +1,7 @@
 //
 // Copyright 2025 Element Creations Ltd.
 // Copyright 2022-2025 New Vector Ltd.
+// Copyright 2026 Unicorn Operations Ltd.
 //
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Element-Commercial.
 // Please see LICENSE files in the repository root for full details.
@@ -146,11 +147,16 @@ class MockScreen: Identifiable {
                                                                                  userIndicatorController: userIndicatorController))
             navigationStackCoordinator.setRootCoordinator(coordinator)
             return navigationStackCoordinator
-        case .authenticationFlow, .provisionedAuthenticationFlow, .singleProviderAuthenticationFlow, .multipleProvidersAuthenticationFlow:
+        case .authenticationFlow, .provisionedAuthenticationFlow, .signInCodeAuthenticationFlow, .singleProviderAuthenticationFlow, .multipleProvidersAuthenticationFlow:
             let appSettings: AppSettings! = appSettings
             
-            if id == .singleProviderAuthenticationFlow || id == .multipleProvidersAuthenticationFlow {
-                let accountProviders = id == .singleProviderAuthenticationFlow ? ["example.com"] : ["guest.example.com", "example.com"]
+            if id != .authenticationFlow {
+                // Family Chat locks the app to `*.safechat.family`; the test servers live under example.com.
+                let accountProviders = switch id {
+                case .singleProviderAuthenticationFlow: ["example.com"]
+                case .multipleProvidersAuthenticationFlow: ["guest.example.com", "example.com"]
+                default: ["*.example.com", "example.com"]
+                }
                 appSettings.override(accountProviders: accountProviders,
                                      allowOtherAccountProviders: false,
                                      hideBrandChrome: false,
@@ -174,7 +180,13 @@ class MockScreen: Identifiable {
                                      mapTilerConfiguration: AppSettings.bundledMapTilerConfiguration)
             }
             
-            let flowCoordinator = AuthenticationFlowCoordinator(authenticationService: AuthenticationService.mock,
+            // A sign-in code the (mock) homeserver refuses: the flow must explain and fall back to the password form.
+            let authenticationService = id == .signInCodeAuthenticationFlow
+                ? AuthenticationService.mock(classicAppManager: nil,
+                                             loginTokenExchanger: LoginTokenExchangerMock(.init(result: .failure(.rejected(errcode: "M_FORBIDDEN")))))
+                : AuthenticationService.mock
+            
+            let flowCoordinator = AuthenticationFlowCoordinator(authenticationService: authenticationService,
                                                                 bugReportService: BugReportServiceMock(.init()),
                                                                 navigationRootCoordinator: navigationRootCoordinator,
                                                                 appMediator: AppMediatorMock(.init()),
@@ -186,6 +198,12 @@ class MockScreen: Identifiable {
             
             if id == .provisionedAuthenticationFlow {
                 flowCoordinator.handleAppRoute(.accountProvisioningLink(.init(accountProvider: "example.com", loginHint: nil)), animated: false)
+            } else if id == .signInCodeAuthenticationFlow {
+                flowCoordinator.handleAppRoute(.accountProvisioningLink(.init(accountProvider: "example.com",
+                                                                              loginHint: "mxid:@alice:example.com",
+                                                                              hs: "example.com",
+                                                                              token: "syl_used_code")),
+                                               animated: false)
             }
             
             return nil

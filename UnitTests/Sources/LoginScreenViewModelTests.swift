@@ -1,6 +1,7 @@
 //
 // Copyright 2025 Element Creations Ltd.
 // Copyright 2022-2025 New Vector Ltd.
+// Copyright 2026 Unicorn Operations Ltd.
 //
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Element-Commercial.
 // Please see LICENSE files in the repository root for full details.
@@ -224,10 +225,53 @@ struct LoginScreenViewModelTests {
         #expect(context.username == "@alice:example.com")
     }
     
+    @Test
+    mutating func matrixIDOnDisallowedServerIsRefused() async throws {
+        // Given the app locked to *.safechat.family (the default).
+        await setupViewModel(allowOtherAccountProviders: false)
+        let callsBefore = clientFactory.makeAuthenticationClientHomeserverAddressSessionDirectoriesPassphraseClientSessionDelegateAppSettingsAppHooksCallsCount
+        
+        // When entering a Matrix ID on another server.
+        let deferred = deferFulfillment(context.observe(\.viewState.bindings.alertInfo)) { $0 != nil }
+        context.username = "@bob:matrix.org"
+        context.send(viewAction: .parseUsername)
+        try await deferred.fulfill()
+        
+        // Then the sign-in is not moved to that server.
+        #expect(context.alertInfo?.id == .accountProviderNotAllowed)
+        #expect(clientFactory.makeAuthenticationClientHomeserverAddressSessionDirectoriesPassphraseClientSessionDelegateAppSettingsAppHooksCallsCount == callsBefore)
+        #expect(!context.viewState.isLoading)
+    }
+    
     // MARK: - Helpers
     
-    private mutating func setupViewModel(homeserverAddress: String = "example.com", loginHint: String? = nil) async {
+    private mutating func setupViewModel(homeserverAddress: String = "example.com",
+                                         loginHint: String? = nil,
+                                         allowOtherAccountProviders: Bool = true) async {
         let appSettings = AppSettings.volatile()
+        // Family Chat locks the app to `*.safechat.family`; upstream's tests use arbitrary servers, so each test
+        // opts in to the locked-down configuration explicitly.
+        appSettings.override(accountProviders: appSettings.accountProviders,
+                             allowOtherAccountProviders: allowOtherAccountProviders,
+                             hideBrandChrome: false,
+                             pushGatewayBaseURL: appSettings.pushGatewayBaseURL,
+                             oAuthRedirectURL: appSettings.oAuthRedirectURL,
+                             oAuthClientURIPath: appSettings.oAuthClientURIPath,
+                             websiteURL: appSettings.websiteURL,
+                             logoURL: appSettings.logoURL,
+                             copyrightURL: appSettings.copyrightURL,
+                             acceptableUseURL: appSettings.acceptableUseURL,
+                             privacyURL: appSettings.privacyURL,
+                             encryptionURL: appSettings.encryptionURL,
+                             deviceVerificationURL: appSettings.deviceVerificationURL,
+                             chatBackupDetailsURL: appSettings.chatBackupDetailsURL,
+                             identityPinningViolationDetailsURL: appSettings.identityPinningViolationDetailsURL,
+                             historySharingDetailsURL: appSettings.historySharingDetailsURL,
+                             elementWebHosts: appSettings.elementWebHosts,
+                             accountProvisioningHost: appSettings.accountProvisioningHost,
+                             bugReportApplicationID: appSettings.bugReportApplicationID,
+                             analyticsTermsURL: appSettings.analyticsTermsURL,
+                             mapTilerConfiguration: AppSettings.bundledMapTilerConfiguration)
         
         clientFactory = ClientFactoryMock(.init())
         service = AuthenticationService(userSessionStore: UserSessionStoreMock(.init()),

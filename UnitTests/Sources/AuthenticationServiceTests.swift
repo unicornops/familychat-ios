@@ -1,6 +1,7 @@
 //
 // Copyright 2025 Element Creations Ltd.
 // Copyright 2024-2025 New Vector Ltd.
+// Copyright 2026 Unicorn Operations Ltd.
 //
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Element-Commercial.
 // Please see LICENSE files in the repository root for full details.
@@ -75,7 +76,8 @@ struct AuthenticationServiceTests {
         }
         
         #expect(service.flow == .login)
-        #expect(service.homeserver.value == .init(address: "safechat.family", loginMode: .unknown))
+        // Family Chat: the default `*.safechat.family` rule offers no server, the user types their family's.
+        #expect(service.homeserver.value == .init(address: "", loginMode: .unknown))
     }
     
     @Test
@@ -130,12 +132,175 @@ struct AuthenticationServiceTests {
         #expect(!encryption.importSecretsBundleSecretsBundleCalled)
     }
     
+    @Test
+    mutating func signInCodeLogin() async throws {
+        // Given a family homeserver and a sign-in code it accepts.
+        let exchanger = LoginTokenExchangerMock(.init(result: .success(.mockAna)))
+        try await setup(serverAddress: "https://smith.safechat.family", loginTokenExchanger: exchanger)
+        
+        // When redeeming the code without any prior server configuration.
+        let result = await service.loginWithToken("syl_code",
+                                                  homeserverURL: "https://smith.safechat.family",
+                                                  accountProvider: "smith.safechat.family",
+                                                  expectedUserID: "@ana:smith.safechat.family",
+                                                  initialDeviceName: "Family Chat iOS")
+        
+        // Then the code went to that homeserver, the credentials were restored into the client and a session was created.
+        switch result {
+        case .success:
+            #expect(exchanger.exchangeCallsCount == 1)
+            #expect(exchanger.exchangeReceivedArguments?.token == "syl_code")
+            #expect(exchanger.exchangeReceivedArguments?.homeserverURL == "https://smith.safechat.family")
+            #expect(exchanger.exchangeReceivedArguments?.initialDeviceName == "Family Chat iOS")
+            #expect(client.restoreSessionSessionCallsCount == 1)
+            #expect(client.restoreSessionSessionReceivedSession?.accessToken == "syt_access")
+            #expect(client.restoreSessionSessionReceivedSession?.userId == "@ana:smith.safechat.family")
+            #expect(client.restoreSessionSessionReceivedSession?.homeserverUrl == "https://smith.safechat.family")
+            #expect(client.loginUsernamePasswordInitialDeviceNameDeviceIdCallsCount == 0)
+            #expect(userSessionStore.userSessionForSessionDirectoriesPassphraseCallsCount == 1)
+            #expect(service.homeserver.value.address == "smith.safechat.family")
+            #expect(exchanger.logoutCallsCount == 0)
+            #expect(!service.isRedeemingSignInCode)
+        case .failure(let error):
+            Issue.record("Unexpected failure: \(error)")
+        }
+    }
+    
+    @Test
+    mutating func signInCodeRejected() async throws {
+        // Given a family homeserver that refuses the code (used or expired).
+        let exchanger = LoginTokenExchangerMock(.init(result: .failure(.rejected(errcode: "M_FORBIDDEN"))))
+        try await setup(serverAddress: "https://smith.safechat.family", loginTokenExchanger: exchanger)
+        
+        // When redeeming it.
+        let result = await service.loginWithToken("syl_code",
+                                                  homeserverURL: "https://smith.safechat.family",
+                                                  accountProvider: "smith.safechat.family",
+                                                  expectedUserID: "@ana:smith.safechat.family",
+                                                  initialDeviceName: nil)
+        
+        // Then the failure is reported as invalid credentials and nothing was restored or stored.
+        try await #require(throws: AuthenticationServiceError.invalidCredentials) { try result.get() }
+        #expect(client.restoreSessionSessionCallsCount == 0)
+        #expect(userSessionStore.userSessionForSessionDirectoriesPassphraseCallsCount == 0)
+    }
+    
+    @Test
+    mutating func signInCodeUnreachableHomeserver() async throws {
+        // Given a family homeserver that cannot be reached.
+        let exchanger = LoginTokenExchangerMock(.init(result: .failure(.network(URLError(.notConnectedToInternet)))))
+        try await setup(serverAddress: "https://smith.safechat.family", loginTokenExchanger: exchanger)
+        
+        let result = await service.loginWithToken("syl_code",
+                                                  homeserverURL: "https://smith.safechat.family",
+                                                  accountProvider: "smith.safechat.family",
+                                                  expectedUserID: "@ana:smith.safechat.family",
+                                                  initialDeviceName: nil)
+        
+        try await #require(throws: AuthenticationServiceError.failedLoggingIn) { try result.get() }
+        #expect(userSessionStore.userSessionForSessionDirectoriesPassphraseCallsCount == 0)
+    }
+    
+    @Test
+    mutating func signInCodeForAnotherAccountIsDiscarded() async throws {
+        // Given a code that the homeserver redeems for another account than the link's login hint named.
+        let exchanger = LoginTokenExchangerMock(.init(result: .success(.mock(userID: "@mallory:smith.safechat.family"))))
+        try await setup(serverAddress: "https://smith.safechat.family", loginTokenExchanger: exchanger)
+        
+        let result = await service.loginWithToken("syl_code",
+                                                  homeserverURL: "https://smith.safechat.family",
+                                                  accountProvider: "smith.safechat.family",
+                                                  expectedUserID: "@ana:smith.safechat.family",
+                                                  initialDeviceName: nil)
+        
+        // Then the session is refused and logged out on the homeserver, never restored or stored.
+        try await #require(throws: AuthenticationServiceError.signInCodeAccountMismatch) { try result.get() }
+        #expect(exchanger.logoutCallsCount == 1)
+        #expect(exchanger.logoutReceivedArguments?.accessToken == "syt_access")
+        #expect(exchanger.logoutReceivedArguments?.homeserverURL == "https://smith.safechat.family")
+        #expect(client.restoreSessionSessionCallsCount == 0)
+        #expect(userSessionStore.userSessionForSessionDirectoriesPassphraseCallsCount == 0)
+    }
+    
+    @Test
+    mutating func signInCodeWithoutHintMustStayOnTheAccountProvider() async throws {
+        // Given a link without a login hint whose code signs in to an account on another server.
+        let exchanger = LoginTokenExchangerMock(.init(result: .success(.mock(userID: "@ana:evil.example"))))
+        try await setup(serverAddress: "https://smith.safechat.family", loginTokenExchanger: exchanger)
+        
+        let result = await service.loginWithToken("syl_code",
+                                                  homeserverURL: "https://smith.safechat.family",
+                                                  accountProvider: "smith.safechat.family",
+                                                  expectedUserID: nil,
+                                                  initialDeviceName: nil)
+        
+        try await #require(throws: AuthenticationServiceError.signInCodeAccountMismatch) { try result.get() }
+        #expect(exchanger.logoutCallsCount == 1)
+        #expect(userSessionStore.userSessionForSessionDirectoriesPassphraseCallsCount == 0)
+    }
+    
+    @Test
+    mutating func signInCodeWithRefreshTokenIsDiscarded() async throws {
+        // Given a homeserver that unexpectedly hands out a refresh token.
+        let exchanger = LoginTokenExchangerMock(.init(result: .success(.mock(userID: "@ana:smith.safechat.family", refreshToken: "syr_refresh"))))
+        try await setup(serverAddress: "https://smith.safechat.family", loginTokenExchanger: exchanger)
+        
+        let result = await service.loginWithToken("syl_code",
+                                                  homeserverURL: "https://smith.safechat.family",
+                                                  accountProvider: "smith.safechat.family",
+                                                  expectedUserID: "@ana:smith.safechat.family",
+                                                  initialDeviceName: nil)
+        
+        // Then the session it can't keep is logged out again rather than left behind.
+        try await #require(throws: AuthenticationServiceError.sessionTokenRefreshNotSupported) { try result.get() }
+        #expect(exchanger.logoutCallsCount == 1)
+        #expect(userSessionStore.userSessionForSessionDirectoriesPassphraseCallsCount == 0)
+    }
+    
+    @Test
+    mutating func signInCodesAreRedeemedOneAtATime() async throws {
+        // Given a redemption in flight.
+        let exchanger = LoginTokenExchangerMock(.init(result: .success(.mockAna)))
+        try await setup(serverAddress: "https://smith.safechat.family", loginTokenExchanger: exchanger)
+        let service = try #require(self.service)
+        var secondResult: Result<UserSessionProtocol, AuthenticationServiceError>?
+        exchanger.exchangeWillAnswer = {
+            #expect(service.isRedeemingSignInCode)
+            // When a second code arrives meanwhile.
+            secondResult = await service.loginWithToken("syl_other",
+                                                        homeserverURL: "https://smith.safechat.family",
+                                                        accountProvider: "smith.safechat.family",
+                                                        expectedUserID: nil,
+                                                        initialDeviceName: nil)
+        }
+        
+        let result = await service.loginWithToken("syl_code",
+                                                  homeserverURL: "https://smith.safechat.family",
+                                                  accountProvider: "smith.safechat.family",
+                                                  expectedUserID: "@ana:smith.safechat.family",
+                                                  initialDeviceName: nil)
+        
+        // Then the second one is refused without being sent, and the first one completes.
+        #expect(throws: AuthenticationServiceError.failedLoggingIn) { try secondResult?.get() }
+        #expect(exchanger.exchangeCallsCount == 1)
+        _ = try result.get()
+        #expect(!service.isRedeemingSignInCode)
+    }
+    
     // MARK: - Helpers
     
     private mutating func setup(serverAddress: String = "matrix.org",
                                 classicAppAccounts: [ClassicAppAccount] = [],
-                                availableSecrets: ClassicAppAccount.AvailableSecrets = .complete) async throws {
-        let configuration: ClientFactoryMock.Configuration = .init()
+                                availableSecrets: ClassicAppAccount.AvailableSecrets = .complete,
+                                loginTokenExchanger: LoginTokenExchangerProtocol = LoginTokenExchangerMock()) async throws {
+        var configuration: ClientFactoryMock.Configuration = .init()
+        // A family homeserver, reached by its client-server URL as a sign-in link names it.
+        configuration.homeserverClients["https://smith.safechat.family"] = ClientSDKMock(.init(serverName: "smith.safechat.family",
+                                                                                               homeserverURL: "https://smith.safechat.family",
+                                                                                               slidingSyncVersion: .native,
+                                                                                               oAuthLoginURL: nil,
+                                                                                               supportsOAuthCreatePrompt: false,
+                                                                                               supportsPasswordLogin: true))
         let clientFactory = ClientFactoryMock(configuration)
         
         client = configuration.homeserverClients[serverAddress]
@@ -153,6 +318,7 @@ struct AuthenticationServiceTests {
                                         encryptionKeyProvider: encryptionKeyProvider,
                                         classicAppManager: classicAppManager,
                                         clientFactory: clientFactory,
+                                        loginTokenExchanger: loginTokenExchanger,
                                         appSettings: .volatile(),
                                         appHooks: AppHooks())
         

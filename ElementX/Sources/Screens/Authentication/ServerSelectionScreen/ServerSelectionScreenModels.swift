@@ -1,6 +1,7 @@
 //
 // Copyright 2025 Element Creations Ltd.
 // Copyright 2022-2025 New Vector Ltd.
+// Copyright 2026 Unicorn Operations Ltd.
 //
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Element-Commercial.
 // Please see LICENSE files in the repository root for full details.
@@ -32,6 +33,8 @@ struct ServerSelectionScreenViewState: BindableState {
     
     /// View state that can be bound to from SwiftUI.
     var bindings: ServerSelectionScreenBindings
+    /// Family Chat: the text field's placeholder, an example family server when the account providers are a wildcard rule.
+    var textFieldPlaceholder = L10n.screenChangeServerTextfieldPlaceholder
     
     /// Upon introspection, this is the UITextField backing the TextField for server input
     var textField: UITextField? {

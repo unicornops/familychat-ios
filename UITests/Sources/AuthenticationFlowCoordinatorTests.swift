@@ -1,6 +1,7 @@
 //
 // Copyright 2025 Element Creations Ltd.
 // Copyright 2022-2025 New Vector Ltd.
+// Copyright 2026 Unicorn Operations Ltd.
 //
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Element-Commercial.
 // Please see LICENSE files in the repository root for full details.
@@ -157,6 +158,29 @@ class AuthenticationFlowCoordinatorUITests: XCTestCase {
         
         // Login Screen: Tap next
         app.buttons[A11yIdentifiers.loginScreen.continue].tap()
+    }
+    
+    func testSignInCodeRejectedFallsBackToPassword() {
+        // Given a provisioning link whose sign-in code the homeserver refuses (used or expired).
+        let app = Application.launch(.signInCodeAuthenticationFlow)
+        
+        // Then the user is first asked to confirm the account the code signs in to.
+        let confirmButton = app.buttons[A11yIdentifiers.alertInfo.secondaryButton]
+        XCTAssertTrue(confirmButton.waitForExistence(timeout: 5.0), "The sign-in code's account should be confirmed first.")
+        XCTAssertTrue(app.staticTexts["Sign in as @alice:example.com?"].exists)
+        confirmButton.tap()
+        
+        // Then the user is told the code cannot be used.
+        let alertButton = app.buttons[A11yIdentifiers.alertInfo.primaryButton]
+        XCTAssertTrue(alertButton.waitForExistence(timeout: 5.0), "The rejected sign-in code should be explained.")
+        XCTAssertTrue(app.staticTexts["This sign-in code cannot be used"].exists)
+        
+        // When continuing, the password form for the same family server is shown, pre-filled from the link.
+        alertButton.tap()
+        
+        let continueButton = app.buttons[A11yIdentifiers.loginScreen.continue]
+        XCTAssertTrue(continueButton.waitForExistence(timeout: 5.0), "The password login should follow a rejected code.")
+        XCTAssertEqual(app.textFields[A11yIdentifiers.loginScreen.emailUsername].value as? String, "@alice:example.com")
     }
     
     func testSingleProviderLoginWithPassword() async throws {

@@ -1,6 +1,7 @@
 //
 // Copyright 2025 Element Creations Ltd.
 // Copyright 2022-2025 New Vector Ltd.
+// Copyright 2026 Unicorn Operations Ltd.
 //
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Element-Commercial.
 // Please see LICENSE files in the repository root for full details.
@@ -264,9 +265,12 @@ class AppCoordinator: AppCoordinatorProtocol, AuthenticationFlowCoordinatorDeleg
         var handled = false
         
         switch appRoute {
-        case .accountProvisioningLink:
+        case .accountProvisioningLink(let provisioningParameters):
             if let authenticationFlowCoordinator {
                 authenticationFlowCoordinator.handleAppRoute(appRoute, animated: appMediator.appState == .active)
+                handled = true
+            } else if provisioningParameters.hasSignInCode, let userSession {
+                showSignInCodeIgnoredAlert(userSession: userSession) // Family Chat: never stored to replay after a logout.
                 handled = true
             }
         default:
@@ -706,6 +710,8 @@ class AppCoordinator: AppCoordinatorProtocol, AuthenticationFlowCoordinatorDeleg
            let storedAppRoute = storedAppRoute.take() {
             userSessionFlowCoordinator.handleAppRoute(storedAppRoute, animated: false)
         }
+        
+        discardStoredSignInCode(userSession: userSession)
         
         if let storedInlineReply {
             await processInlineReply(roomID: storedInlineReply.roomID, replyText: storedInlineReply.message)
@@ -1309,5 +1315,27 @@ class AppCoordinator: AppCoordinatorProtocol, AuthenticationFlowCoordinatorDeleg
                     task.setTaskCompleted(success: true)
                 }
             }
+    }
+}
+
+// MARK: - Family Chat sign-in codes
+
+private extension AppCoordinator {
+    /// A sign-in code is a short-lived credential for someone's account: while signed in, it is never kept around to
+    /// be replayed after a logout. The user is told they're already signed in instead.
+    func showSignInCodeIgnoredAlert(userSession: UserSessionProtocol) {
+        MXLog.info("Ignoring a sign-in code while already signed in.")
+        navigationRootCoordinator.alertInfo = .init(id: .init(),
+                                                    title: L10n.Error.accountAlreadyLoggedIn(userSession.clientProxy.userID),
+                                                    message: UntranslatedL10n.screenOnboardingSignInCodeAlreadySignedInMessage)
+    }
+    
+    /// A sign-in code stored during launch, before a session was restored, must not wait for a logout to be replayed.
+    func discardStoredSignInCode(userSession: UserSessionProtocol) {
+        guard case .accountProvisioningLink(let provisioningParameters) = storedAppRoute, provisioningParameters.hasSignInCode else {
+            return
+        }
+        storedAppRoute = nil
+        showSignInCodeIgnoredAlert(userSession: userSession)
     }
 }

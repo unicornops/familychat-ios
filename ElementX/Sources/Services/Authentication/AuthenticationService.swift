@@ -1,6 +1,7 @@
 //
 // Copyright 2025 Element Creations Ltd.
 // Copyright 2022-2025 New Vector Ltd.
+// Copyright 2026 Unicorn Operations Ltd.
 //
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Element-Commercial.
 // Please see LICENSE files in the repository root for full details.
@@ -18,6 +19,7 @@ class AuthenticationService: AuthenticationServiceProtocol {
     private let userSessionStore: UserSessionStoreProtocol
     private let classicAppManager: ClassicAppManagerProtocol?
     private let clientFactory: ClientFactoryProtocol
+    private let loginTokenExchanger: LoginTokenExchangerProtocol
     private let appSettings: AppSettings
     private let appHooks: AppHooks
     
@@ -34,6 +36,7 @@ class AuthenticationService: AuthenticationServiceProtocol {
          encryptionKeyProvider: EncryptionKeyProviderProtocol,
          classicAppManager: ClassicAppManagerProtocol?,
          clientFactory: ClientFactoryProtocol = ClientFactory(),
+         loginTokenExchanger: LoginTokenExchangerProtocol = LoginTokenExchanger(),
          appSettings: AppSettings,
          appHooks: AppHooks) {
         sessionDirectories = .init()
@@ -42,6 +45,7 @@ class AuthenticationService: AuthenticationServiceProtocol {
         self.userSessionStore = userSessionStore
         self.classicAppManager = classicAppManager
         self.clientFactory = clientFactory
+        self.loginTokenExchanger = loginTokenExchanger
         self.appSettings = appSettings
         self.appHooks = appHooks
         
@@ -176,6 +180,116 @@ class AuthenticationService: AuthenticationServiceProtocol {
             MXLog.error("Failed logging in with error: \(error)")
             return .failure(.failedLoggingIn)
         }
+    }
+    
+    private(set) var isRedeemingSignInCode = false
+    
+    func loginWithToken(_ token: String,
+                        homeserverURL: URL,
+                        accountProvider: String,
+                        expectedUserID: String?,
+                        initialDeviceName: String?) async -> Result<UserSessionProtocol, AuthenticationServiceError> {
+        // One redemption at a time: a second one would rotate the session directory out from under the first.
+        guard !isRedeemingSignInCode else {
+            MXLog.error("A sign-in code is already being redeemed, refusing another.")
+            return .failure(.failedLoggingIn)
+        }
+        isRedeemingSignInCode = true
+        defer { isRedeemingSignInCode = false }
+        
+        let client: ClientProtocol
+        let credentials: LoginTokenCredentials
+        do {
+            // A fresh client for the homeserver named by the link: the sign-in code needs no server selection first.
+            // Built before the code is spent, so a homeserver the app can't use doesn't burn it.
+            client = try await makeClient(homeserverAddress: homeserverURL.absoluteString)
+            
+            guard !Task.isCancelled else {
+                MXLog.warning("Sign-in code redemption cancelled before the code was redeemed.")
+                return .failure(.failedLoggingIn)
+            }
+            
+            // The SDK has no `m.login.token` entry point; redeem the code ourselves and hand the credentials
+            // over as a restored session, exactly as a stored session is reopened at launch.
+            credentials = try await loginTokenExchanger.exchange(token: token,
+                                                                 homeserverURL: homeserverURL,
+                                                                 initialDeviceName: initialDeviceName)
+        } catch LoginTokenExchangeError.rejected(let errcode) {
+            MXLog.error("Sign-in code rejected by the homeserver: \(errcode ?? "no errcode")")
+            return .failure(.invalidCredentials)
+        } catch {
+            // Never carries the token: the exchanger only reports HTTP status and errcode.
+            MXLog.error("Failed redeeming a sign-in code: \(error)")
+            return .failure(.failedLoggingIn)
+        }
+        
+        // From here on a device exists on the homeserver: every way out other than success discards it again.
+        func discardSession(_ error: AuthenticationServiceError) async -> Result<UserSessionProtocol, AuthenticationServiceError> {
+            await loginTokenExchanger.logout(accessToken: credentials.accessToken, homeserverURL: homeserverURL)
+            return .failure(error)
+        }
+        
+        // Login CSRF: the session must be the account the link named, not whichever account minted the code.
+        let isExpectedAccount = if let expectedUserID {
+            Self.isSameUserID(credentials.userID, expectedUserID)
+        } else {
+            AccountProvisioningParameters.serverName(ofUserID: credentials.userID) == accountProvider.lowercased()
+        }
+        guard isExpectedAccount else {
+            MXLog.error("Sign-in code signed in to another account than the link named, discarding the session.")
+            return await discardSession(.signInCodeAccountMismatch)
+        }
+        
+        if credentials.refreshToken != nil {
+            // Same rule as password login: a non-OAuth session with a refresh token cannot be restored later.
+            MXLog.warning("Refresh token found for a token login session, can't restore session, discarding it.")
+            return await discardSession(.sessionTokenRefreshNotSupported)
+        }
+        
+        guard !Task.isCancelled else {
+            MXLog.warning("Sign-in code redemption cancelled, discarding the session.")
+            return await discardSession(.failedLoggingIn)
+        }
+        
+        do {
+            try await client.restoreSession(session: Session(accessToken: credentials.accessToken,
+                                                             refreshToken: nil,
+                                                             userId: credentials.userID,
+                                                             deviceId: credentials.deviceID,
+                                                             homeserverUrl: homeserverURL.absoluteString,
+                                                             oauthData: nil,
+                                                             slidingSyncVersion: .native))
+            
+            await verifyClientIfPossible(client: client)
+            
+            // Last chance to back out before the session is persisted to the keychain.
+            guard !Task.isCancelled else {
+                MXLog.warning("Sign-in code redemption cancelled, discarding the session.")
+                return await discardSession(.failedLoggingIn)
+            }
+            
+            switch await userSession(for: client) {
+            case .success(let userSession):
+                self.client = client
+                // The bare server name, never `https://…`: it is what the user signed in to and what gets remembered.
+                homeserverSubject.send(LoginHomeserver(address: accountProvider, loginMode: .password))
+                return .success(userSession)
+            case .failure(let error):
+                MXLog.error("Failed setting up the sign-in code's session, discarding it.")
+                return await discardSession(error)
+            }
+        } catch {
+            MXLog.error("Failed restoring the sign-in code's session, discarding it: \(error)")
+            return await discardSession(.failedLoggingIn)
+        }
+    }
+    
+    /// Whether two Matrix IDs name the same account: the localpart exactly, the server name ignoring case.
+    private static func isSameUserID(_ lhs: String, _ rhs: String) -> Bool {
+        let lhsParts = lhs.split(separator: ":", maxSplits: 1)
+        let rhsParts = rhs.split(separator: ":", maxSplits: 1)
+        guard lhsParts.count == 2, rhsParts.count == 2 else { return false }
+        return lhsParts[0] == rhsParts[0] && lhsParts[1].lowercased() == rhsParts[1].lowercased()
     }
     
     func loginWithQRCode(data: Data) -> QRLoginProgressPublisher {
@@ -390,11 +504,13 @@ extension AuthenticationService {
         mock(classicAppManager: nil)
     }
     
-    static func mock(classicAppManager: ClassicAppManagerProtocol?) -> AuthenticationService {
+    static func mock(classicAppManager: ClassicAppManagerProtocol?,
+                     loginTokenExchanger: LoginTokenExchangerProtocol = LoginTokenExchangerMock()) -> AuthenticationService {
         AuthenticationService(userSessionStore: UserSessionStoreMock(.init()),
                               encryptionKeyProvider: EncryptionKeyProvider(),
                               classicAppManager: classicAppManager,
                               clientFactory: ClientFactoryMock(.init()),
+                              loginTokenExchanger: loginTokenExchanger,
                               appSettings: .volatile(),
                               appHooks: AppHooks())
     }

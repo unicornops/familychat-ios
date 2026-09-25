@@ -1,6 +1,16 @@
 "screen_about_source_code" = "Source code";
 "screen_about_source_code_notice" = "Family Chat is a fork of Element X by Element (AGPL-3.0); source at https://github.com/unicornops/familychat-ios";
+"screen_change_server_error_not_allowed" = "You can only sign in to your family's own server, for example %1$@.";
 "screen_home_tab_search" = "Search";
+"screen_onboarding_sign_in_code_account_mismatch_message" = "That sign-in code is for a different account than the one the link named, so you have not been signed in. Ask a parent for a new code, or sign in with your password.";
+"screen_onboarding_sign_in_code_already_signed_in_message" = "To use this sign-in code for another account, sign out first and then open the code again.";
+"screen_onboarding_sign_in_code_confirm_message" = "Only continue if this is your account and you asked a parent for this sign-in code.";
+"screen_onboarding_sign_in_code_confirm_title" = "Sign in as %1$@?";
+"screen_onboarding_sign_in_code_confirm_title_no_hint" = "Sign in to %1$@?";
+"screen_onboarding_sign_in_code_failed_message" = "Your family's server could not be reached with this sign-in code. Check your connection and try a new code, or sign in with your password.";
+"screen_onboarding_sign_in_code_loading" = "Signing you in…";
+"screen_onboarding_sign_in_code_rejected_message" = "That sign-in code has already been used or has expired. Ask a parent for a new code from the control panel, or sign in with your password.";
+"screen_onboarding_sign_in_code_rejected_title" = "This sign-in code cannot be used";
 "screen_search_empty_state_message" = "Search for chats and messages";
 "screen_search_empty_state_title" = "Start searching...";
 "screen_search_no_results_message" = "There are no results for “%1$@.” Try a new search term.";

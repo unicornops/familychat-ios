@@ -1,6 +1,7 @@
 //
 // Copyright 2025 Element Creations Ltd.
 // Copyright 2022-2025 New Vector Ltd.
+// Copyright 2026 Unicorn Operations Ltd.
 //
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Element-Commercial.
 // Please see LICENSE files in the repository root for full details.
@@ -67,7 +68,17 @@ class LoginScreenViewModel: LoginScreenViewModelType, LoginScreenViewModelProtoc
     private func parseUsername() {
         let username = state.bindings.username
         
-        guard let homeserverDomain = try? serverNameFromUserId(userId: username) else { return }
+        guard let serverName = try? serverNameFromUserId(userId: username) else { return }
+        
+        // Family Chat: a Matrix ID only moves the sign-in to its server when that server is an allowed account
+        // provider, and then only the canonical host that was checked is handed to the SDK.
+        guard let homeserverDomain = appSettings.allowedAccountProvider(serverName) else {
+            MXLog.info("The Matrix ID's server is not an allowed account provider.")
+            state.bindings.alertInfo = AlertInfo(id: .accountProviderNotAllowed,
+                                                 title: L10n.commonServerNotSupported,
+                                                 message: UntranslatedL10n.screenChangeServerErrorNotAllowed(appSettings.exampleAccountProvider))
+            return
+        }
         
         startLoading(isInteractionBlocking: false)
         

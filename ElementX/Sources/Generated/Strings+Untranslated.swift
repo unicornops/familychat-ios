@@ -14,8 +14,34 @@ internal nonisolated enum UntranslatedL10n {
   internal static var screenAboutSourceCode: String { return UntranslatedL10n.tr("Untranslated", "screen_about_source_code") }
   /// Family Chat is a fork of Element X by Element (AGPL-3.0); source at https://github.com/unicornops/familychat-ios
   internal static var screenAboutSourceCodeNotice: String { return UntranslatedL10n.tr("Untranslated", "screen_about_source_code_notice") }
+  /// You can only sign in to your family's own server, for example %1$@.
+  internal static func screenChangeServerErrorNotAllowed(_ p1: Any) -> String {
+    return UntranslatedL10n.tr("Untranslated", "screen_change_server_error_not_allowed", String(describing: p1))
+  }
   /// Search
   internal static var screenHomeTabSearch: String { return UntranslatedL10n.tr("Untranslated", "screen_home_tab_search") }
+  /// That sign-in code is for a different account than the one the link named, so you have not been signed in. Ask a parent for a new code, or sign in with your password.
+  internal static var screenOnboardingSignInCodeAccountMismatchMessage: String { return UntranslatedL10n.tr("Untranslated", "screen_onboarding_sign_in_code_account_mismatch_message") }
+  /// To use this sign-in code for another account, sign out first and then open the code again.
+  internal static var screenOnboardingSignInCodeAlreadySignedInMessage: String { return UntranslatedL10n.tr("Untranslated", "screen_onboarding_sign_in_code_already_signed_in_message") }
+  /// Only continue if this is your account and you asked a parent for this sign-in code.
+  internal static var screenOnboardingSignInCodeConfirmMessage: String { return UntranslatedL10n.tr("Untranslated", "screen_onboarding_sign_in_code_confirm_message") }
+  /// Sign in as %1$@?
+  internal static func screenOnboardingSignInCodeConfirmTitle(_ p1: Any) -> String {
+    return UntranslatedL10n.tr("Untranslated", "screen_onboarding_sign_in_code_confirm_title", String(describing: p1))
+  }
+  /// Sign in to %1$@?
+  internal static func screenOnboardingSignInCodeConfirmTitleNoHint(_ p1: Any) -> String {
+    return UntranslatedL10n.tr("Untranslated", "screen_onboarding_sign_in_code_confirm_title_no_hint", String(describing: p1))
+  }
+  /// Your family's server could not be reached with this sign-in code. Check your connection and try a new code, or sign in with your password.
+  internal static var screenOnboardingSignInCodeFailedMessage: String { return UntranslatedL10n.tr("Untranslated", "screen_onboarding_sign_in_code_failed_message") }
+  /// Signing you in…
+  internal static var screenOnboardingSignInCodeLoading: String { return UntranslatedL10n.tr("Untranslated", "screen_onboarding_sign_in_code_loading") }
+  /// That sign-in code has already been used or has expired. Ask a parent for a new code from the control panel, or sign in with your password.
+  internal static var screenOnboardingSignInCodeRejectedMessage: String { return UntranslatedL10n.tr("Untranslated", "screen_onboarding_sign_in_code_rejected_message") }
+  /// This sign-in code cannot be used
+  internal static var screenOnboardingSignInCodeRejectedTitle: String { return UntranslatedL10n.tr("Untranslated", "screen_onboarding_sign_in_code_rejected_title") }
   /// Search for chats and messages
   internal static var screenSearchEmptyStateMessage: String { return UntranslatedL10n.tr("Untranslated", "screen_search_empty_state_message") }
   /// Start searching...

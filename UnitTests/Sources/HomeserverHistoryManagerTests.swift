@@ -1,5 +1,6 @@
 //
 // Copyright 2026 Element Creations Ltd.
+// Copyright 2026 Unicorn Operations Ltd.
 //
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Element-Commercial.
 // Please see LICENSE files in the repository root for full details.
@@ -123,6 +124,32 @@ struct HomeserverHistoryManagerTests {
         #expect(manager.server(matchingPrefix: "e") == nil)
         // and doesn't affect the other server entries
         #expect(manager.server(matchingPrefix: "m") == "matrix.org")
+    }
+    
+    @Test
+    func wildcardAccountProvidersAreNotSuggested() {
+        // Given a manager with no history and the default `*.safechat.family` rule.
+        let manager = createManager(withServerHistory: [])
+        
+        // Then neither the rule nor its bare suffix (which is not an allowed server) is ever suggested.
+        #expect(manager.server(matchingPrefix: "*") == nil)
+        #expect(manager.server(matchingPrefix: "*.") == nil)
+        #expect(manager.server(matchingPrefix: "sa") == nil)
+        #expect(manager.server(matchingPrefix: ".") == nil)
+        
+        // But once a family name and a dot are typed, the suffix completes it.
+        #expect(manager.server(matchingPrefix: "smith.") == "smith.safechat.family")
+        #expect(manager.server(matchingPrefix: "Smith.Sa") == "smith.safechat.family")
+        #expect(manager.server(matchingPrefix: "smith.example") == nil)
+    }
+    
+    @Test
+    func previousFamilyServersAreSuggestedFirst() {
+        // Given a manager that remembers a family server.
+        let manager = createManager(withServerHistory: ["smith.safechat.family"])
+        
+        // Then it is completed from its first letter.
+        #expect(manager.server(matchingPrefix: "s") == "smith.safechat.family")
     }
     
     private func createManager(withServerHistory history: [String]) -> HomeserverHistoryManager {
