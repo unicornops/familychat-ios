@@ -139,11 +139,13 @@ struct LoginTokenExchanger: LoginTokenExchangerProtocol {
 final nonisolated class RedirectRefusingTaskDelegate: NSObject, URLSessionTaskDelegate, Sendable {
     static let shared = RedirectRefusingTaskDelegate()
     
+    // The completion handler variant: Swift 6.3 crashes emitting the Objective-C thunk for the async one.
     func urlSession(_ session: URLSession,
                     task: URLSessionTask,
                     willPerformHTTPRedirection response: HTTPURLResponse,
-                    newRequest request: URLRequest) async -> URLRequest? {
+                    newRequest request: URLRequest,
+                    completionHandler: @escaping @Sendable (URLRequest?) -> Void) {
         MXLog.warning("Refusing an HTTP \(response.statusCode) redirect for a sign-in request.")
-        return nil
+        completionHandler(nil)
     }
 }

@@ -104,10 +104,12 @@ struct LoginTokenExchangerTests {
         let response = try #require(HTTPURLResponse(url: url, statusCode: 308, httpVersion: nil, headerFields: ["Location": evilURL.absoluteString]))
         let task = URLSession(configuration: .ephemeral).dataTask(with: url)
         
-        let newRequest = await RedirectRefusingTaskDelegate.shared.urlSession(URLSession.shared,
-                                                                              task: task,
-                                                                              willPerformHTTPRedirection: response,
-                                                                              newRequest: URLRequest(url: evilURL))
+        let newRequest = await withCheckedContinuation { continuation in
+            RedirectRefusingTaskDelegate.shared.urlSession(URLSession.shared,
+                                                           task: task,
+                                                           willPerformHTTPRedirection: response,
+                                                           newRequest: URLRequest(url: evilURL)) { continuation.resume(returning: $0) }
+        }
         #expect(newRequest == nil)
     }
     
