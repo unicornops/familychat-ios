@@ -1326,7 +1326,7 @@ private extension AppCoordinator {
     func showSignInCodeIgnoredAlert(userSession: UserSessionProtocol) {
         MXLog.info("Ignoring a sign-in code while already signed in.")
         navigationRootCoordinator.alertInfo = .init(id: .init(),
-                                                    title: L10n.errorAccountAlreadyLoggedIn(userSession.clientProxy.userID),
+                                                    title: L10n.Error.accountAlreadyLoggedIn(userSession.clientProxy.userID),
                                                     message: UntranslatedL10n.screenOnboardingSignInCodeAlreadySignedInMessage)
     }
     
