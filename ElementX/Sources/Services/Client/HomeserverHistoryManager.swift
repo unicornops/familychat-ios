@@ -61,14 +61,29 @@ class HomeserverHistoryManager {
     /// Retrieves the most recent server matching the given prefix, if any
     func server(matchingPrefix prefix: String) -> String? {
         let lowercasedPrefix = prefix.lowercased()
-        return servers.first { $0.hasPrefix(lowercasedPrefix) }
+        return servers.first { $0.hasPrefix(lowercasedPrefix) } ?? familyServer(completing: lowercasedPrefix)
+    }
+    
+    /// Family Chat: once the user has typed their family's name and a dot (`smith.`, `smith.sa`), completes it with
+    /// a wildcard rule's suffix (`smith.safechat.family`). The bare suffix is never suggested: it isn't a server.
+    private func familyServer(completing lowercasedPrefix: String) -> String? {
+        guard let dot = lowercasedPrefix.firstIndex(of: "."), dot != lowercasedPrefix.startIndex else {
+            return nil
+        }
+        let slug = lowercasedPrefix[..<dot]
+        let typedSuffix = lowercasedPrefix[lowercasedPrefix.index(after: dot)...]
+        return appSettings.wildcardAccountProviderSuffixes
+            .filter { $0.hasPrefix(typedSuffix) }
+            .map { "\(slug).\($0)" }
+            .first { AppSettings.isValidHostAndPort($0) }
     }
     
     /// Retrieves all servers from AppSettings, previous and pre-provided and stores them in memory
     /// in all lowercase. This is the list that matches are made against.
     private func updateCachedServers() {
         let previous = appSettings.previousServers.map { $0.lowercased() }
-        let defaultProviders = appSettings.suggestedAccountProviders.map { $0.lowercased() }
+        // Family Chat: a wildcard rule is not a server, so only plain entries are offered (see `familyServer(completing:)`).
+        let defaultProviders = appSettings.pickableAccountProviders.map { $0.lowercased() }
         
         cachedServers = previous + defaultProviders
     }

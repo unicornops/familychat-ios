@@ -196,8 +196,9 @@ final nonisolated class AppSettings: @unchecked Sendable {
         if let previousServer = previousServers.first {
             return previousServer
         }
-        // A wildcard entry is a rule, not a server: offer its suffix as the starting point to type from.
-        return pickableAccountProviders.first ?? suggestedAccountProviders.first ?? ""
+        // A wildcard entry is a rule, not a server, and its bare suffix is not an allowed server either: start empty
+        // and let the text field's placeholder show an example (`yourfamily.safechat.family`).
+        return pickableAccountProviders.first ?? ""
     }
     
     // MARK: - Security

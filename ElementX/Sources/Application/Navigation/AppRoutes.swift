@@ -109,6 +109,21 @@ struct AccountProvisioningParameters: Hashable {
         AccountProvisioningParameters(accountProvider: accountProvider, loginHint: loginHint)
     }
     
+    /// The Matrix ID named by an MSC4198 `mxid:` login hint, if that's what the hint is.
+    var loginHintUserID: String? {
+        guard let loginHint, loginHint.hasPrefix("mxid:") else { return nil }
+        let userID = String(loginHint.dropFirst("mxid:".count))
+        return Self.serverName(ofUserID: userID) == nil ? nil : userID
+    }
+    
+    /// The server name of a Matrix ID (`@ana:smith.safechat.family` → `smith.safechat.family`), lower-cased.
+    static func serverName(ofUserID userID: String) -> String? {
+        guard userID.hasPrefix("@") else { return nil }
+        let parts = userID.split(separator: ":", maxSplits: 1)
+        guard parts.count == 2, parts[0].count > 1, !parts[1].isEmpty else { return nil }
+        return parts[1].lowercased()
+    }
+    
     /// The base URL to redeem the sign-in code against. The scheme is always https: a link names a host, never a URL.
     var signInCodeHomeserverURL: URL? {
         guard let hs else { return nil }
@@ -231,7 +246,6 @@ private struct ElementWebURLParser: URLParser {
     }
 }
 
-/// The parser for user provisioning links.
 /// The parser for account provisioning links: `https://safechat.family/app/login?…` as a universal link, or the
 /// same host and path behind the app's own URL scheme (`family.safechat.app://safechat.family/app/login?…`), which
 /// the website's fallback page uses. Both must behave identically, so the scheme is deliberately not checked.
@@ -251,18 +265,11 @@ private struct AccountProvisioningURLParser: URLParser {
         // A sign-in code: `hs` must be a bare hostname (optionally `:port`), never a URL, so a link cannot change
         // the scheme or add a path to where the token is sent. Anything else drops the code and keeps the prefill.
         let hs = components.queryItems?.first { $0.name == AccountProvisioningParameters.CodingKeys.hs.rawValue }?.value
-            .map { $0.trimmingCharacters(in: .whitespaces).lowercased() }
-            .flatMap { Self.isValidHostAndPort($0) ? $0 : nil }
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
+            .flatMap { AppSettings.isValidHostAndPort($0) ? $0 : nil }
         let token = components.queryItems?.first { $0.name == AccountProvisioningParameters.CodingKeys.token.rawValue }?.value
         
         return .accountProvisioningLink(.init(accountProvider: serverName, loginHint: loginHint, hs: hs, token: token))
-    }
-    
-    /// DNS hostname labels, optionally followed by a port.
-    static func isValidHostAndPort(_ value: String) -> Bool {
-        let label = "[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?"
-        let pattern = "^\(label)(\\.\(label))*(:[0-9]{1,5})?$"
-        return value.range(of: pattern, options: .regularExpression) != nil
     }
 }
 

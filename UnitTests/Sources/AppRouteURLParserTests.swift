@@ -78,6 +78,26 @@ struct AppRouteURLParserTests {
     }
     
     @Test
+    func accountProvisioningLinkTrimsTrailingNewlinesFromTheHost() throws {
+        // Given a sign-in code whose host has a trailing newline (which `$` would have let through untrimmed).
+        let url = try #require(URL(string: "https://safechat.family/app/login?account_provider=smith.safechat.family&hs=smith.safechat.family%0A&token=syl_abc"))
+        
+        // Then the host is trimmed, so the code is redeemed against the plain host.
+        #expect(appRouteURLParser.route(from: url) == .accountProvisioningLink(.init(accountProvider: "smith.safechat.family",
+                                                                                     loginHint: nil,
+                                                                                     hs: "smith.safechat.family",
+                                                                                     token: "syl_abc")))
+    }
+    
+    @Test
+    func accountProvisioningLinkLoginHintUserID() {
+        #expect(AccountProvisioningParameters(accountProvider: "a.safechat.family", loginHint: "mxid:@ana:a.safechat.family").loginHintUserID == "@ana:a.safechat.family")
+        #expect(AccountProvisioningParameters(accountProvider: "a.safechat.family", loginHint: "ana").loginHintUserID == nil)
+        #expect(AccountProvisioningParameters(accountProvider: "a.safechat.family", loginHint: "mxid:ana").loginHintUserID == nil)
+        #expect(AccountProvisioningParameters.serverName(ofUserID: "@ana:A.SafeChat.Family") == "a.safechat.family")
+    }
+    
+    @Test
     func accountProvisioningLinkViaAppScheme() throws {
         // Given the website's fallback page opening the app through its own scheme with the same host and path.
         let scheme = InfoPlistReader.app.appScheme
@@ -100,7 +120,8 @@ struct AppRouteURLParserTests {
         }
         
         // A host that is not a bare hostname drops the code entirely: the token is never sent anywhere odd.
-        for hs in ["https%3A%2F%2Fsmith.safechat.family", "smith.safechat.family%2Fpath", "user%40smith.safechat.family", "smith.safechat.family:abc", "-smith.safechat.family"] {
+        for hs in ["https%3A%2F%2Fsmith.safechat.family", "smith.safechat.family%2Fpath", "user%40smith.safechat.family", "smith.safechat.family:abc", "-smith.safechat.family",
+                   "evil.com%5C.safechat.family", "evil.com%0Asmith.safechat.family", "smith.safechat.family%0Aevil.com"] {
             let url = try #require(URL(string: "https://safechat.family/app/login?account_provider=smith.safechat.family&hs=\(hs)&token=syl_abc"))
             #expect(appRouteURLParser.route(from: url) == .accountProvisioningLink(plain), Comment(rawValue: hs))
         }

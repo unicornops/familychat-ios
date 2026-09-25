@@ -288,11 +288,11 @@ struct ServerSelectionScreenViewModelTests {
         let textField = UITextField()
         context.send(viewAction: .updateTextField(textField))
         
-        // When the user types a prefix that matches an account provider.
-        let typedSoFar = "sa"
-        let nextCharacter = "f"
+        // When the user types their family's name and the start of the wildcard account provider's suffix.
+        let typedSoFar = "smith.s"
+        let nextCharacter = "a"
         let typed = typedSoFar + nextCharacter
-        let expectedAddress = "safechat.family"
+        let expectedAddress = "smith.safechat.family"
         textField.text = typedSoFar
         let deferred = deferFulfillment(context.observe(\.homeserverAddress)) { $0 == expectedAddress }
         _ = textField.delegate?.textField?(textField, shouldChangeCharactersIn: NSRange(location: typedSoFar.count, length: 0), replacementString: nextCharacter)
@@ -371,6 +371,46 @@ struct ServerSelectionScreenViewModelTests {
         #expect(context.viewState.footerErrorMessage?.contains("yourfamily.safechat.family") == true)
         #expect(clientFactory.makeAuthenticationClientHomeserverAddressSessionDirectoriesPassphraseClientSessionDelegateAppSettingsAppHooksCallsCount == 0)
         #expect(service.homeserver.value.loginMode == .unknown)
+    }
+    
+    @Test
+    mutating func familyServerFieldStartsEmptyWithAnExample() throws {
+        // Given the app locked to *.safechat.family with no previous server.
+        try setup(authenticationFlow: .login, allowOtherAccountProviders: false)
+        
+        // Then the field is empty (the bare suffix isn't a server) and the placeholder shows what to type.
+        #expect(context.homeserverAddress == "")
+        #expect(context.viewState.textFieldPlaceholder == "yourfamily.safechat.family")
+    }
+    
+    @Test
+    mutating func userInputRefusesParserDifferentials() async throws {
+        // Given the app locked to *.safechat.family.
+        try setup(authenticationFlow: .login, allowOtherAccountProviders: false)
+        
+        // When confirming an address that Foundation and the SDK would read as different hosts.
+        context.homeserverAddress = "https://evil.com\\.safechat.family"
+        let deferred = deferFulfillment(context.observe(\.viewState.footerErrorMessage)) { $0 != nil }
+        context.send(viewAction: .confirm)
+        try await deferred.fulfill()
+        
+        // Then it is refused before the SDK ever sees it.
+        #expect(clientFactory.makeAuthenticationClientHomeserverAddressSessionDirectoriesPassphraseClientSessionDelegateAppSettingsAppHooksCallsCount == 0)
+    }
+    
+    @Test
+    mutating func userInputHandsTheCanonicalHostToTheSDK() async throws {
+        // Given the app locked to *.safechat.family.
+        try setup(authenticationFlow: .login, allowOtherAccountProviders: false)
+        
+        // When confirming the family's server as a URL.
+        context.homeserverAddress = "https://Smith.SafeChat.Family/"
+        let deferred = deferFulfillment(viewModel.actions) { $0.isContinueWithPassword }
+        context.send(viewAction: .confirm)
+        try await deferred.fulfill()
+        
+        // Then the SDK is given the bare host that was checked, not the raw input.
+        #expect(clientFactory.makeAuthenticationClientHomeserverAddressSessionDirectoriesPassphraseClientSessionDelegateAppSettingsAppHooksReceivedArguments?.homeserverAddress == "smith.safechat.family")
     }
     
     @Test

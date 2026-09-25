@@ -131,10 +131,25 @@ struct HomeserverHistoryManagerTests {
         // Given a manager with no history and the default `*.safechat.family` rule.
         let manager = createManager(withServerHistory: [])
         
-        // Then the rule is never completed as if it were a server, only its suffix is suggested.
+        // Then neither the rule nor its bare suffix (which is not an allowed server) is ever suggested.
         #expect(manager.server(matchingPrefix: "*") == nil)
         #expect(manager.server(matchingPrefix: "*.") == nil)
-        #expect(manager.server(matchingPrefix: "sa") == "safechat.family")
+        #expect(manager.server(matchingPrefix: "sa") == nil)
+        #expect(manager.server(matchingPrefix: ".") == nil)
+        
+        // But once a family name and a dot are typed, the suffix completes it.
+        #expect(manager.server(matchingPrefix: "smith.") == "smith.safechat.family")
+        #expect(manager.server(matchingPrefix: "Smith.Sa") == "smith.safechat.family")
+        #expect(manager.server(matchingPrefix: "smith.example") == nil)
+    }
+    
+    @Test
+    func previousFamilyServersAreSuggestedFirst() {
+        // Given a manager that remembers a family server.
+        let manager = createManager(withServerHistory: ["smith.safechat.family"])
+        
+        // Then it is completed from its first letter.
+        #expect(manager.server(matchingPrefix: "s") == "smith.safechat.family")
     }
     
     private func createManager(withServerHistory history: [String]) -> HomeserverHistoryManager {

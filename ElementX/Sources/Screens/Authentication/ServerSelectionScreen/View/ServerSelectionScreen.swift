@@ -1,6 +1,7 @@
 //
 // Copyright 2025 Element Creations Ltd.
 // Copyright 2022-2025 New Vector Ltd.
+// Copyright 2026 Unicorn Operations Ltd.
 //
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Element-Commercial.
 // Please see LICENSE files in the repository root for full details.
@@ -67,7 +68,7 @@ struct ServerSelectionScreen: View {
         VStack(alignment: .leading, spacing: 24) {
             switch context.viewState.mode {
             case .userInput:
-                TextField(L10n.screenChangeServerTextfieldPlaceholder, text: $context.homeserverAddress, selection: $context.homeserverSelection)
+                TextField(context.viewState.textFieldPlaceholder, text: $context.homeserverAddress, selection: $context.homeserverSelection)
                     .textFieldStyle(.compound(labelText: Text(L10n.screenChangeServerTextfieldHeader),
                                               footerText: Text(context.viewState.footerMessage),
                                               state: context.viewState.isShowingFooterError ? .error : .default,

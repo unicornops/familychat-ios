@@ -27,15 +27,35 @@ nonisolated extension AppSettings {
         return serverName == pattern
     }
     
+    /// DNS hostname labels (lower-case), optionally followed by a port. Anchored with `\A` and `\z` so that nothing,
+    /// not even a trailing newline, can follow; `\`, `@`, `%`, `/`, `?`, `#` and whitespace can never match.
+    static func isValidHostAndPort(_ value: String) -> Bool {
+        let label = "[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?"
+        let pattern = "\\A\(label)(\\.\(label))*(:[0-9]{1,5})?\\z"
+        return value.range(of: pattern, options: .regularExpression) != nil
+    }
+    
+    /// The canonical `hostname[:port]` (lower-cased) that `input` names, or nil when it is anything else.
+    ///
+    /// Accepts a bare host, optionally with one leading `https://` and one trailing `/`, and nothing more. The input
+    /// is deliberately not parsed as a URL: Foundation and the SDK's WHATWG parser disagree about inputs such as
+    /// `https://evil.com\.safechat.family` (WHATWG reads `\` as `/`, so the host is `evil.com`) or
+    /// `evil.com\@a.safechat.family`, so anything that isn't plainly a host is refused rather than interpreted.
+    static func canonicalAccountProviderHost(_ input: String) -> String? {
+        var value = Substring(input.trimmingCharacters(in: .whitespacesAndNewlines).lowercased())
+        if value.hasPrefix("https://") {
+            value = value.dropFirst("https://".count)
+        }
+        if value.hasSuffix("/") {
+            value = value.dropLast()
+        }
+        let host = String(value)
+        return isValidHostAndPort(host) ? host : nil
+    }
+    
     /// The account providers a user can be offered directly: every entry that isn't a wildcard rule.
     var pickableAccountProviders: [String] {
         accountProviders.filter { !Self.isWildcardAccountProvider($0) }
-    }
-    
-    /// The account providers worth suggesting while typing: plain entries as they are, a wildcard rule as its suffix
-    /// (`*.safechat.family` → `safechat.family`), which the user completes with their family's name.
-    var suggestedAccountProviders: [String] {
-        accountProviders.map { Self.isWildcardAccountProvider($0) ? String($0.dropFirst(2)) : $0 }
     }
     
     /// Whether `accountProviders` contains a wildcard rule, in which case the user has to type their own server.
@@ -43,14 +63,32 @@ nonisolated extension AppSettings {
         accountProviders.contains(where: Self.isWildcardAccountProvider)
     }
     
-    /// Whether the app may sign in to `serverName` (a server name, a host, or a URL whose host is checked).
-    /// Always true when any account provider is allowed.
-    func isAllowedAccountProvider(_ serverName: String) -> Bool {
+    /// The suffixes of the wildcard rules (`*.safechat.family` → `safechat.family`).
+    var wildcardAccountProviderSuffixes: [String] {
+        accountProviders.filter(Self.isWildcardAccountProvider).map { String($0.dropFirst(2)).lowercased() }
+    }
+    
+    /// The server to hand to `AuthenticationService.configure(for:flow:)` for `input`, or nil when the app may not
+    /// sign in there.
+    ///
+    /// When any account provider is allowed the input is returned untouched, as upstream. Otherwise it must be a
+    /// canonical `hostname[:port]` (see `canonicalAccountProviderHost(_:)`) matching an `accountProviders` entry, and
+    /// that canonical host is returned, never the raw input, so the SDK can't read a different host out of it.
+    func allowedAccountProvider(_ input: String) -> String? {
         if allowOtherAccountProviders {
-            return true
+            return input
         }
-        let host = Self.host(from: serverName)
-        return accountProviders.contains { Self.accountProvider(host, matches: $0) }
+        guard let hostAndPort = Self.canonicalAccountProviderHost(input) else {
+            return nil
+        }
+        let host = hostAndPort.split(separator: ":", maxSplits: 1).first.map(String.init) ?? hostAndPort
+        return accountProviders.contains { Self.accountProvider(host, matches: $0) } ? hostAndPort : nil
+    }
+    
+    /// Whether the app may sign in to `input` (see `allowedAccountProvider(_:)`). Always true when any account
+    /// provider is allowed.
+    func isAllowedAccountProvider(_ input: String) -> Bool {
+        allowedAccountProvider(input) != nil
     }
     
     /// An example a user can copy for the wildcard rule: `yourfamily.safechat.family`.
@@ -59,12 +97,5 @@ nonisolated extension AppSettings {
             return ""
         }
         return Self.isWildcardAccountProvider(first) ? "yourfamily\(first.dropFirst())" : first
-    }
-    
-    /// The host part of a server name, `host:port` or URL, lower-cased.
-    private static func host(from serverName: String) -> String {
-        let trimmed = serverName.trimmingCharacters(in: .whitespacesAndNewlines)
-        let withScheme = trimmed.contains("://") ? trimmed : "https://\(trimmed)"
-        return (URL(string: withScheme)?.host() ?? trimmed).lowercased()
     }
 }
