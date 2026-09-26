@@ -46,8 +46,9 @@ final class ShareToMapsAppActivity: UIActivity {
     override nonisolated func prepare(withActivityItems activityItems: [Any]) {
         // UIActivity isn't annotated but UIKit guarantees this is called on the main thread.
         MainActor.assumeIsolated {
-            UIApplication.shared.open(type.activityURL(for: location, senderName: senderName), options: [:]) { [weak self] result in
-                self?.activityDidFinish(result)
+            // Family Chat: maps apps and websites are outside the app, so they need the parental gate.
+            ParentalGate.shared.openExternalURL(type.activityURL(for: location, senderName: senderName)) { [weak self] outcome in
+                self?.activityDidFinish(outcome == .opened)
             }
         }
     }

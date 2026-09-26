@@ -44,8 +44,9 @@ class AppMediator: AppMediatorProtocol {
         application.endBackgroundTask(identifier)
     }
     
+    /// Family Chat: goes through the parental gate, as every link leaving the app must.
     func open(_ url: URL) {
-        application.open(url, options: [:], completionHandler: nil)
+        ParentalGate.shared.openExternalURL(url)
     }
     
     func openAppSettings() {

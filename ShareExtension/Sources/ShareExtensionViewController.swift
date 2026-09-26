@@ -135,7 +135,8 @@ class ShareExtensionViewController: UIViewController {
         var responder: UIResponder? = self
         while responder != nil {
             if let application = responder as? UIApplication {
-                await application.open(url)
+                // Not a link out: this is the main app's own URL scheme, handed the shared items.
+                await application.open(url) // swiftlint:disable:this external_url_open
                 return
             }
             

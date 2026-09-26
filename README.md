@@ -35,6 +35,7 @@ endorsed by, or supported by Element.
   under `*.safechat.family`; `account_provider` may be the family's own domain. A used or expired code falls back
   to the password form for `account_provider`, which (like a typed server) must resolve under `*.safechat.family`;
   the password never goes to `hs` directly. Contract: `docs/client-login-links.md` in unicornops/family-chat.
+- Every link that leaves the app goes through a parental gate (see [Parental gate](#parental-gate)).
 - Push notifications go through our own gateway at `push.safechat.family`.
 - PostHog analytics, Sentry and MapTiler are disabled (no keys are shipped).
 - Element's commercial licence offer (`LICENSE-COMMERCIAL`), the `Enterprise` submodule and the
@@ -43,6 +44,30 @@ endorsed by, or supported by Element.
 The fork deliberately keeps the upstream directory layout, target names and Xcode project name
 (`ElementX`) so that merges from upstream stay cheap. Only the user-visible name and the bundle
 identifiers change.
+
+## Parental gate
+
+Family Chat is listed in Apple's Kids Category (age band 9–11), so App Review guideline 1.3 requires a
+parental gate before any link out of the app or anything purchasable (unicornops/family-chat#232 decision 10).
+The gate is a randomised adult-level question with the numbers written in words ("Type the number six
+hundred and forty-seven in digits", "What is thirteen times seven?"), shown to every account, with a new
+question on every presentation and after every wrong answer, no timer, and support for VoiceOver and
+Dynamic Type. The code lives in
+[`ElementX/Sources/Screens/ParentalGate/`](ElementX/Sources/Screens/ParentalGate).
+
+**Rule for new code: open anything outside the app with `ParentalGate.shared.openExternalURL(_:)`.** This
+applies to web links, `mailto:`/`tel:`/`sms:` and other apps' URL schemes, and to the planned control panel
+settings entry and GIF attribution. SwiftUI views can keep using the `openURL` environment action, which the
+app routes through the gate; views hosted outside the app's environment (for example inside Quick Look)
+should set `.environment(\.openURL, ParentalGate.shared.openURLAction)`. The `external_url_open` SwiftLint
+rule rejects direct `UIApplication.shared.open(…)`, `application.open(…)`, `SFSafariViewController(…)` and
+`Link(destination:)`. Links the app routes itself (its universal links on `safechat.family/app/…`,
+matrix.to and other permalinks, its own URL scheme) are not gated. The app sells nothing; anything
+purchasable added later must also sit behind the gate.
+
+Not gated on purpose: sign-in and account pages shown in `ASWebAuthenticationSession` (the family's own auth server on OAuth homeservers, of which there are none yet; not a link
+out), iOS's own Settings page for this app (permissions), and user-initiated sharing and saving (share
+sheets, "Save to Files").
 
 ## Build instructions
 

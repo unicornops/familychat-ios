@@ -93,7 +93,7 @@ struct SessionVerificationScreen: View {
                                                       mediaProvider: context.mediaProvider)
             case .userInitiator:
                 Button(L10n.actionLearnMore) {
-                    UIApplication.shared.open(context.viewState.learnMoreURL)
+                    ParentalGate.shared.openExternalURL(context.viewState.learnMoreURL) // Family Chat: parental gate.
                 }
                 .buttonStyle(.compound(.tertiary, size: .small))
             default:

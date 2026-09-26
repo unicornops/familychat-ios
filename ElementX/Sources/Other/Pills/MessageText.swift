@@ -264,9 +264,12 @@ struct MessageText: UIViewRepresentable {
                 guard !url.requiresConfirmation else {
                     return nil
                 }
-                // We don't want to show a URL preview for permalinks
-                let isPermalink = parseMatrixEntityFrom(uri: url.absoluteString) != nil
-                return .init(preview: isPermalink ? nil : .default, menu: defaultMenu)
+                // Family Chat: the default preview loads the web page and the default menu opens Safari
+                // directly, both bypassing the parental gate. Tapping the link opens it through the gate.
+                let copyLink = UIAction(title: L10n.actionCopyLink) { _ in
+                    UIPasteboard.general.url = url
+                }
+                return .init(preview: nil, menu: UIMenu(children: [copyLink]))
             default:
                 return nil
             }
