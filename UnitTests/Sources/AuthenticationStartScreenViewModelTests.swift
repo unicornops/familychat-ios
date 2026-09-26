@@ -359,7 +359,7 @@ final class AuthenticationStartScreenViewModelTests {
         try await deferredAlert.fulfill()
         
         // Then the password form is never shown: discovery refused the domain and nothing fell back to `hs`.
-        let addresses = clientFactory.makeAuthenticationClientHomeserverAddressSessionDirectoriesPassphraseClientSessionDelegateAppSettingsAppHooksReceivedInvocations.map { $0.homeserverAddress }
+        let addresses = clientFactory.makeAuthenticationClientHomeserverAddressSessionDirectoriesPassphraseClientSessionDelegateAppSettingsAppHooksReceivedInvocations.map(\.homeserverAddress)
         #expect(addresses == ["https://smith.safechat.family", "evil.com"])
         #expect(familyClient.loginUsernamePasswordInitialDeviceNameDeviceIdCallsCount == 0)
     }
