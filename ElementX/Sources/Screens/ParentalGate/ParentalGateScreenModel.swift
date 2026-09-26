@@ -26,6 +26,8 @@ final class ParentalGateScreenModel {
     
     /// The host (or scheme, e.g. "mailto") the link would open, to show the grown-up where it goes.
     let destination: String?
+    /// A warning when the link was shown as text that looks like a different URL.
+    let linkTextWarning: String?
     
     @ObservationIgnored private let makeChallenge: (ParentalGateChallenge?) -> ParentalGateChallenge
     @ObservationIgnored private let completion: (Bool) -> Void
@@ -35,9 +37,11 @@ final class ParentalGateScreenModel {
     }
     
     init(destination url: URL,
+         linkText: String? = nil,
          makeChallenge: @escaping (ParentalGateChallenge?) -> ParentalGateChallenge = { ParentalGateChallenge.random(excluding: $0) },
          completion: @escaping (Bool) -> Void) {
         destination = url.host() ?? url.scheme
+        linkTextWarning = linkText.map { UntranslatedL10n.screenParentalGateLinkTextMismatch($0, url.absoluteString) }
         self.makeChallenge = makeChallenge
         self.completion = completion
         challenge = makeChallenge(Self.mostRecentChallenge)

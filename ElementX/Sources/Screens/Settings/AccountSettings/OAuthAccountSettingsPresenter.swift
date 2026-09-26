@@ -67,7 +67,12 @@ class OAuthAccountSettingsPresenter: NSObject {
         if accountURL.scheme == "https" || accountURL.scheme == "http" {
             session.start()
         } else {
-            appMediator.open(accountURL)
+            // Family Chat: another app is behind the parental gate; not passing it counts as cancelling.
+            appMediator.open(accountURL) { [continuation] opened in
+                guard !opened, let continuation else { return }
+                continuation.yield(.failure(.userCancellation))
+                continuation.finish()
+            }
         }
     }
 }

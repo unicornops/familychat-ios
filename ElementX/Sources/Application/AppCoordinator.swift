@@ -80,7 +80,7 @@ class AppCoordinator: AppCoordinatorProtocol, AuthenticationFlowCoordinatorDeleg
         
         windowManager = WindowManager(appDelegate: appDelegate)
         let networkMonitor = NetworkMonitor()
-        appMediator = AppMediator(windowManager: windowManager, networkMonitor: networkMonitor)
+        appMediator = AppMediator(windowManager: windowManager, networkMonitor: networkMonitor, parentalGate: .shared)
         
         guard let userDefaults = TrackedUserDefaults(suiteName: AppSettings.suiteName) else {
             fatalError("Catastrophic error retrieving user defaults for \(AppSettings.suiteName)")

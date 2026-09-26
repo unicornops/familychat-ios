@@ -9,24 +9,12 @@ import Foundation
 
 /// An adult-level question for the parental gate (unicornops/family-chat#232 decision 10).
 ///
-/// Numbers are always written in words so that a child who can only recognise digits can't copy the
-/// answer from the question, and the ranges are chosen to need an adult's reading or mental arithmetic
-/// without being annoying: "Type the number six hundred and forty-seven in digits" or
-/// "What is thirteen times seven?". The answer is always typed in digits.
+/// Always a multiplication of a two-digit number by a single digit, both written in words, e.g.
+/// "What is twenty-three times seven?". Words stop a child copying digits into a calculator, and the
+/// two-digit operand (13–49, never a round ten) keeps it beyond the times tables younger children know
+/// by heart while staying quick mental arithmetic for an adult. The answer is typed in digits.
 nonisolated struct ParentalGateChallenge: Equatable, Sendable {
-    enum Kind: Equatable, Sendable {
-        /// Type the number, given in words, in digits.
-        case typeNumber(Int)
-        /// Multiply two numbers given in words.
-        case multiply(Int, Int)
-    }
-    
-    /// Always three digits with a hyphenated tens part, e.g. "six hundred and forty-seven".
-    static let hundredsRange = 1...9
-    static let tensRange = 2...9
-    static let onesRange = 1...9
-    /// Two-digit by one-digit mental arithmetic, skipping the trivial ten times table.
-    static let multiplicandRange = 6...19
+    static let multiplicandRange = 13...49
     static let multiplierRange = 3...9
     
     /// The question strings are only in English (`Untranslated.strings`), so the number words are English
@@ -34,24 +22,15 @@ nonisolated struct ParentalGateChallenge: Equatable, Sendable {
     /// ``ParentalGateNumberWords/words(for:locale:)`` switches to Foundation's spell-out rules.
     static let wordsLocale = Locale(identifier: "en_GB")
     
-    let kind: Kind
+    let multiplicand: Int
+    let multiplier: Int
     
     var answer: Int {
-        switch kind {
-        case .typeNumber(let number):
-            number
-        case .multiply(let multiplicand, let multiplier):
-            multiplicand * multiplier
-        }
+        multiplicand * multiplier
     }
     
     var question: String {
-        switch kind {
-        case .typeNumber(let number):
-            UntranslatedL10n.screenParentalGateQuestionTypeNumber(Self.words(number))
-        case .multiply(let multiplicand, let multiplier):
-            UntranslatedL10n.screenParentalGateQuestionMultiply(Self.words(multiplicand), Self.words(multiplier))
-        }
+        UntranslatedL10n.screenParentalGateQuestionMultiply(Self.words(multiplicand), Self.words(multiplier))
     }
     
     /// Draws a random challenge that is never equal to `previous`, so a wrong answer can't be retried
@@ -64,13 +43,8 @@ nonisolated struct ParentalGateChallenge: Equatable, Sendable {
     static func random(excluding previous: ParentalGateChallenge? = nil,
                        using generator: inout some RandomNumberGenerator) -> ParentalGateChallenge {
         while true {
-            let kind: Kind = if Bool.random(using: &generator) {
-                .typeNumber(randomNumberToType(using: &generator))
-            } else {
-                .multiply(randomMultiplicand(using: &generator), Int.random(in: multiplierRange, using: &generator))
-            }
-            let candidate = ParentalGateChallenge(kind: kind)
-            
+            let candidate = ParentalGateChallenge(multiplicand: randomMultiplicand(using: &generator),
+                                                  multiplier: Int.random(in: multiplierRange, using: &generator))
             if candidate != previous {
                 return candidate
             }
@@ -93,17 +67,10 @@ nonisolated struct ParentalGateChallenge: Equatable, Sendable {
         ParentalGateNumberWords.words(for: number, locale: wordsLocale)
     }
     
-    private static func randomNumberToType(using generator: inout some RandomNumberGenerator) -> Int {
-        let hundreds = Int.random(in: hundredsRange, using: &generator)
-        let tens = Int.random(in: tensRange, using: &generator)
-        let ones = Int.random(in: onesRange, using: &generator)
-        return hundreds * 100 + tens * 10 + ones
-    }
-    
     private static func randomMultiplicand(using generator: inout some RandomNumberGenerator) -> Int {
         while true {
             let multiplicand = Int.random(in: multiplicandRange, using: &generator)
-            if multiplicand != 10 {
+            if !multiplicand.isMultiple(of: 10) {
                 return multiplicand
             }
         }

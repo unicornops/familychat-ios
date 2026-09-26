@@ -52,15 +52,15 @@ internal nonisolated enum UntranslatedL10n {
   internal static func screenParentalGateDestination(_ p1: Any) -> String {
     return UntranslatedL10n.tr("Untranslated", "screen_parental_gate_destination", String(describing: p1))
   }
+  /// Careful: the link text shows “%1$@”, but it opens %2$@.
+  internal static func screenParentalGateLinkTextMismatch(_ p1: Any, _ p2: Any) -> String {
+    return UntranslatedL10n.tr("Untranslated", "screen_parental_gate_link_text_mismatch", String(describing: p1), String(describing: p2))
+  }
   /// This link leaves Family Chat. Ask a grown-up to answer the question below to continue.
   internal static var screenParentalGateMessage: String { return UntranslatedL10n.tr("Untranslated", "screen_parental_gate_message") }
   /// What is %1$@ times %2$@?
   internal static func screenParentalGateQuestionMultiply(_ p1: Any, _ p2: Any) -> String {
     return UntranslatedL10n.tr("Untranslated", "screen_parental_gate_question_multiply", String(describing: p1), String(describing: p2))
-  }
-  /// Type the number %1$@ in digits.
-  internal static func screenParentalGateQuestionTypeNumber(_ p1: Any) -> String {
-    return UntranslatedL10n.tr("Untranslated", "screen_parental_gate_question_type_number", String(describing: p1))
   }
   /// Ask a grown-up
   internal static var screenParentalGateTitle: String { return UntranslatedL10n.tr("Untranslated", "screen_parental_gate_title") }

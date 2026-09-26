@@ -49,25 +49,41 @@ identifiers change.
 
 Family Chat is listed in Apple's Kids Category (age band 9–11), so App Review guideline 1.3 requires a
 parental gate before any link out of the app or anything purchasable (unicornops/family-chat#232 decision 10).
-The gate is a randomised adult-level question with the numbers written in words ("Type the number six
-hundred and forty-seven in digits", "What is thirteen times seven?"), shown to every account, with a new
-question on every presentation and after every wrong answer, no timer, and support for VoiceOver and
-Dynamic Type. The code lives in
+The gate asks a multiplication written in words, a two-digit number from 13 to 49 (never a round ten) times
+a single digit from 3 to 9, e.g. "What is twenty-three times seven?", answered in digits. It is shown to
+every account, draws a new question on every presentation and after every wrong answer, closes after three
+wrong answers, has no timer, and supports VoiceOver and Dynamic Type. The code lives in
 [`ElementX/Sources/Screens/ParentalGate/`](ElementX/Sources/Screens/ParentalGate).
 
-**Rule for new code: open anything outside the app with `ParentalGate.shared.openExternalURL(_:)`.** This
-applies to web links, `mailto:`/`tel:`/`sms:` and other apps' URL schemes, and to the planned control panel
-settings entry and GIF attribution. SwiftUI views can keep using the `openURL` environment action, which the
-app routes through the gate; views hosted outside the app's environment (for example inside Quick Look)
-should set `.environment(\.openURL, ParentalGate.shared.openURLAction)`. The `external_url_open` SwiftLint
-rule rejects direct `UIApplication.shared.open(…)`, `application.open(…)`, `SFSafariViewController(…)` and
-`Link(destination:)`. Links the app routes itself (its universal links on `safechat.family/app/…`,
-matrix.to and other permalinks, its own URL scheme) are not gated. The app sells nothing; anything
-purchasable added later must also sit behind the gate.
+**Rule for new code: open anything outside the app with `AppMediatorProtocol.open(_:)` (or
+`ParentalGate.openExternalURL(_:)` where no app mediator can be injected).** This applies to web links,
+`mailto:`/`tel:`/`sms:` and other apps' URL schemes, and to the planned control panel settings entry and GIF
+attribution. SwiftUI views can keep using the `openURL` environment action, which the app routes through the
+gate; views hosted outside the app's environment (for example inside Quick Look) should set
+`.environment(\.openURL, ParentalGate.shared.openURLAction)`. Two SwiftLint rules back this up:
+`external_url_open` rejects `UIApplication.shared.open`, `application.open(`, `SFSafariViewController`,
+`Link(` and `.systemAction`, and `embedded_browser` rejects new `WKWebView(`/`ASWebAuthenticationSession(`
+outside the files already reviewed. A regex can't catch aliased or unusual calls, so reviews still need to
+watch for new ways of opening URLs.
 
-Not gated on purpose: sign-in and account pages shown in `ASWebAuthenticationSession` (the family's own auth server on OAuth homeservers, of which there are none yet; not a link
-out), iOS's own Settings page for this app (permissions), and user-initiated sharing and saving (share
-sheets, "Save to Files").
+Not gated:
+- Links the app routes itself, i.e. whatever `AppRouteURLParser` recognises: matrix.to and other permalinks,
+  `app.safechat.family` links, links on `safechat.family` (any path) that carry an `account_provider` query
+  item, and the same behind the app's own URL scheme. Other `safechat.family` links, `/app/…` without
+  `account_provider` included, are gated and open in the browser with `no_universal_links=true`; the AASA on
+  safechat.family must exclude that query item or iOS hands them straight back to the app.
+- iOS's own Settings pages for this app (permissions, notifications).
+- Sign-in and account pages shown in `ASWebAuthenticationSession` (the family's own auth server on OAuth
+  homeservers, of which there are none yet). Handing sign-in to another app is gated, and not passing the gate
+  cancels the sign-in.
+- User-initiated sharing and saving: share sheets (including "Share…" on a message link) and "Save to Files".
+
+Known gaps (accepted risk): the system text edit menu can offer "Look Up", "Translate" and "Search Web",
+which leave the app. They are removed from the caption composer and from message text, but not from the main
+rich-text composer (its `UITextView` delegate belongs to the matrix-rich-text-editor package), SwiftUI
+selectable text (`.textSelection(.enabled)` in the timeline item menu, room details, settings and avatar headers) or
+other system text fields, which offer no hook to change that menu. The app sells nothing; anything
+purchasable added later must also sit behind the gate.
 
 ## Build instructions
 

@@ -16,7 +16,11 @@ protocol AppMediatorProtocol {
     
     var appState: UIApplication.State { get }
     
+    /// Family Chat: goes through the parental gate, as every link leaving the app must.
     func open(_ url: URL)
+    
+    /// Family Chat: like ``open(_:)``, reporting whether the URL was opened (`false` when the gate wasn't passed).
+    func open(_ url: URL, completion: @escaping (Bool) -> Void)
     
     func openAppSettings()
     

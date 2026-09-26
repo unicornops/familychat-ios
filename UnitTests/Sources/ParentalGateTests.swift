@@ -29,7 +29,7 @@ struct ParentalGateTests {
     func numberWordsFollowTheLocaleLanguage() {
         // English locales use the tested English words.
         #expect(ParentalGateNumberWords.words(for: 47, locale: Locale(identifier: "en_US")) == "forty-seven")
-        #expect(ParentalGateNumberWords.words(for: 647, locale: ParentalGateChallenge.wordsLocale) == "six hundred and forty-seven")
+        #expect(ParentalGateNumberWords.words(for: 23, locale: ParentalGateChallenge.wordsLocale) == "twenty-three")
         
         // Other languages use Foundation's spell-out rules for that language, never digits.
         let formatter = NumberFormatter()
@@ -43,27 +43,17 @@ struct ParentalGateTests {
     // MARK: - Challenges
     
     @Test
-    func questionsAreWordsWithinAdultLevelRanges() {
+    func questionsAreMultiplicationsInWordsWithinAdultLevelRanges() {
         var generator = SeededGenerator(seed: 42)
         
         for _ in 0..<1000 {
             let challenge = ParentalGateChallenge.random(using: &generator)
             
             #expect(!challenge.question.contains { $0.isNumber }, Comment(rawValue: challenge.question))
-            
-            switch challenge.kind {
-            case .typeNumber(let number):
-                // Three digits with a hyphenated tens part, e.g. "six hundred and forty-seven".
-                #expect((121...999).contains(number))
-                #expect(number % 100 >= 21 && number % 10 != 0)
-                #expect(challenge.question == "Type the number \(ParentalGateNumberWords.english(number)) in digits.")
-                #expect(challenge.answer == number)
-            case .multiply(let multiplicand, let multiplier):
-                #expect(ParentalGateChallenge.multiplicandRange.contains(multiplicand) && multiplicand != 10)
-                #expect(ParentalGateChallenge.multiplierRange.contains(multiplier))
-                #expect(challenge.question == "What is \(ParentalGateNumberWords.english(multiplicand)) times \(ParentalGateNumberWords.english(multiplier))?")
-                #expect(challenge.answer == multiplicand * multiplier)
-            }
+            #expect((13...49).contains(challenge.multiplicand) && !challenge.multiplicand.isMultiple(of: 10))
+            #expect((3...9).contains(challenge.multiplier))
+            #expect(challenge.question == "What is \(ParentalGateNumberWords.english(challenge.multiplicand)) times \(ParentalGateNumberWords.english(challenge.multiplier))?")
+            #expect(challenge.answer == challenge.multiplicand * challenge.multiplier)
         }
     }
     
@@ -71,22 +61,9 @@ struct ParentalGateTests {
     func challengesAreRandomised() {
         let challenges = (0..<200).map { _ in ParentalGateChallenge.random() }
         
-        // Both kinds turn up and the questions vary widely.
-        #expect(challenges.contains {
-            if case .typeNumber = $0.kind {
-                true
-            } else {
-                false
-            }
-        })
-        #expect(challenges.contains {
-            if case .multiply = $0.kind {
-                true
-            } else {
-                false
-            }
-        })
         #expect(Set(challenges.map(\.question)).count > 100)
+        #expect(Set(challenges.map(\.multiplier)).count == 7)
+        #expect(Set(challenges.map(\.multiplicand)).count > 20)
     }
     
     @Test
@@ -111,22 +88,18 @@ struct ParentalGateTests {
     
     @Test
     func answerValidation() {
-        let challenge = ParentalGateChallenge(kind: .typeNumber(647))
+        let challenge = ParentalGateChallenge(multiplicand: 23, multiplier: 7)
+        #expect(challenge.question == "What is twenty-three times seven?")
+        #expect(challenge.answer == 161)
         
-        for accepted in ["647", " 647", "647 ", "\t647\n", "0647", "000647"] {
+        for accepted in ["161", " 161", "161 ", "\t161\n", "0161", "000161"] {
             #expect(challenge.accepts(accepted), Comment(rawValue: accepted))
         }
         
-        for rejected in ["", " ", "646", "6470", "64 7", "+647", "-647", "647.0", "6,47", "0x287",
-                         "six hundred and forty-seven", "６４７", "٦٤٧", "647a"] {
+        for rejected in ["", " ", "160", "1610", "16 1", "+161", "-161", "161.0", "1,61", "0xA1",
+                         "one hundred and sixty-one", "１６１", "١٦١", "161a", "237"] {
             #expect(!challenge.accepts(rejected), Comment(rawValue: rejected))
         }
-        
-        let multiplication = ParentalGateChallenge(kind: .multiply(13, 7))
-        #expect(multiplication.answer == 91)
-        #expect(multiplication.question == "What is thirteen times seven?")
-        #expect(multiplication.accepts(" 91 "))
-        #expect(!multiplication.accepts("137"))
     }
     
     // MARK: - Screen model
@@ -135,13 +108,13 @@ struct ParentalGateTests {
     func correctAnswerPassesOnce() {
         var results: [Bool] = []
         let model = ParentalGateScreenModel(destination: "https://safechat.family/privacy/",
-                                            makeChallenge: { _ in .init(kind: .typeNumber(647)) },
+                                            makeChallenge: { _ in .init(multiplicand: 23, multiplier: 7) },
                                             completion: { results.append($0) })
         
         #expect(model.destination == "safechat.family")
         #expect(!model.canSubmit)
         
-        model.answer = " 647 "
+        model.answer = " 161 "
         model.submit()
         model.submit()
         model.cancel()
@@ -188,7 +161,7 @@ struct ParentalGateTests {
     func cancellingNeverPasses() {
         var results: [Bool] = []
         let model = ParentalGateScreenModel(destination: "tel:+353123456",
-                                            makeChallenge: { _ in .init(kind: .multiply(12, 7)) },
+                                            makeChallenge: { _ in .init(multiplicand: 12, multiplier: 7) },
                                             completion: { results.append($0) })
         
         model.cancel()
@@ -306,9 +279,144 @@ struct ParentalGateTests {
         #expect(opened.isEmpty)
         #expect(outcomes == Array(repeating: .handledInternally, count: internalURLs.count))
         
-        // While a look-alike on the same domain is still gated.
-        gate.openExternalURL("https://safechat.family/privacy/")
-        #expect(presenter.presentedURLs == ["https://safechat.family/privacy/"])
+        // Links on the app's own domain that it can't route are still gated, `/app/…` without
+        // `account_provider` included.
+        for url: URL in ["https://safechat.family/privacy/", "https://safechat.family/app/x", "https://safechat.family/app/login"] {
+            gate.openExternalURL(url)
+            #expect(presenter.presentedURLs.last == url)
+            presenter.finish(passed: false)
+        }
+        #expect(routed == internalURLs)
+        #expect(opened.isEmpty)
+    }
+    
+    @Test
+    func phishingLinksAreUnwrappedAndFlaggedAtTheGate() throws {
+        let presenter = ParentalGatePresenterSpy()
+        var opened: [URL] = []
+        let gate = ParentalGate(presenter: presenter, internalURLHandler: { _ in false }, systemOpener: { opened.append($0) })
+        
+        // Given a link whose text looks like a different URL, as the message formatter wraps it.
+        let realURL: URL = "https://evil.example.com/login"
+        var components = URLComponents()
+        components.scheme = URL.confirmationScheme
+        components.queryItems = ConfirmURLParameters(internalURL: realURL, displayString: "https://safechat.family").urlQueryItems
+        let wrappedURL = try #require(components.url)
+        
+        gate.openExternalURL(wrappedURL)
+        
+        // Then the gate shows the real destination and the misleading text, and opens the real URL.
+        #expect(presenter.presentedURLs == [realURL])
+        #expect(presenter.presentedLinkTexts == ["https://safechat.family"])
+        presenter.finish(passed: true)
+        #expect(opened == [realURL])
+        
+        let model = ParentalGateScreenModel(destination: realURL, linkText: "https://safechat.family") { _ in }
+        #expect(model.linkTextWarning?.contains("https://safechat.family") == true)
+        #expect(model.linkTextWarning?.contains(realURL.absoluteString) == true)
+    }
+    
+    @Test
+    func ownDomainLinksOpenInTheBrowserNotBackInTheApp() {
+        let presenter = ParentalGatePresenterSpy()
+        var opened: [URL] = []
+        let gate = ParentalGate(presenter: presenter, internalURLHandler: { _ in false }, systemOpener: { opened.append($0) })
+        
+        for url: URL in ["https://safechat.family/app/x", "https://app.safechat.family/about?x=1", "https://example.com/app/x"] {
+            gate.openExternalURL(url)
+            presenter.finish(passed: true)
+        }
+        
+        #expect(opened == ["https://safechat.family/app/x?no_universal_links=true",
+                           "https://app.safechat.family/about?x=1&no_universal_links=true",
+                           "https://example.com/app/x"])
+        #expect(ParentalGate.browserURL(for: "https://safechat.family/a?no_universal_links=true") == "https://safechat.family/a?no_universal_links=true")
+    }
+    
+    // MARK: - Wiring
+    
+    @Test
+    func appMediatorOpensThroughTheGate() {
+        let presenter = ParentalGatePresenterSpy()
+        var opened: [URL] = []
+        let gate = ParentalGate(presenter: presenter, internalURLHandler: { _ in false }, systemOpener: { opened.append($0) })
+        let appMediator = AppMediator(windowManager: WindowManagerMock(), networkMonitor: NetworkMonitorMock(), parentalGate: gate)
+        var results: [Bool] = []
+        
+        appMediator.open("https://example.com/help")
+        #expect(presenter.presentedURLs == ["https://example.com/help"])
+        #expect(opened.isEmpty)
+        presenter.finish(passed: false)
+        
+        appMediator.open("otherapp://sign-in") { results.append($0) }
+        presenter.finish(passed: false)
+        appMediator.open("otherapp://sign-in") { results.append($0) }
+        presenter.finish(passed: true)
+        
+        #expect(results == [false, true])
+        #expect(opened == ["otherapp://sign-in"])
+    }
+    
+    // MARK: - Window presenter
+    
+    @Test
+    func presenterFailsWithoutAWindowScene() {
+        let presenter = ParentalGateWindowPresenter(notificationCenter: NotificationCenter()) { nil }
+        var results: [Bool] = []
+        
+        presenter.presentGate(for: "https://example.com", linkText: nil) { results.append($0) }
+        
+        #expect(results == [false])
+        #expect(!presenter.isPresenting)
+    }
+    
+    @Test
+    func presenterCancelsWhenItsSceneLeaves() throws {
+        let windowScene = try #require(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
+        
+        for notification in [UIScene.didEnterBackgroundNotification, UIScene.didDisconnectNotification] {
+            let notificationCenter = NotificationCenter()
+            let presenter = ParentalGateWindowPresenter(notificationCenter: notificationCenter) { windowScene }
+            var results: [Bool] = []
+            
+            presenter.presentGate(for: "https://example.com", linkText: nil) { results.append($0) }
+            #expect(presenter.isPresenting)
+            
+            // Another scene going away leaves this gate alone…
+            notificationCenter.post(name: notification, object: NSObject())
+            #expect(results.isEmpty)
+            
+            // …while its own scene going away cancels it, so the gate can never be left waiting.
+            notificationCenter.post(name: notification, object: windowScene)
+            #expect(results == [false])
+            #expect(!presenter.isPresenting)
+        }
+    }
+    
+    // MARK: - Edit menus
+    
+    @Test
+    func editMenusLoseTheItemsThatLeaveTheApp() {
+        let copy = UICommand(title: "Copy", action: #selector(UIResponderStandardEditActions.copy(_:)))
+        let searchWeb = UICommand(title: "Search Web", action: Selector(("_searchWeb:")))
+        let translate = UICommand(title: "Translate", action: Selector(("_translate:")))
+        let lookUp = UIMenu(title: "", identifier: .lookup, options: .displayInline, children: [UICommand(title: "Look Up", action: Selector(("_define:")))])
+        let share = UICommand(title: "Share…", action: Selector(("_share:")))
+        let nested = UIMenu(title: "", options: .displayInline, children: [searchWeb, share])
+        
+        let menu = ParentalGateEditMenu.menu(from: [copy, lookUp, translate, nested])
+        
+        let titles = flattenedTitles(menu.children)
+        #expect(titles == ["Copy", "Share…"])
+    }
+    
+    private func flattenedTitles(_ elements: [UIMenuElement]) -> [String] {
+        elements.flatMap { element -> [String] in
+            if let menu = element as? UIMenu {
+                return flattenedTitles(menu.children)
+            }
+            return [element.title]
+        }
     }
 }
 
@@ -317,10 +425,12 @@ struct ParentalGateTests {
 @MainActor
 private final class ParentalGatePresenterSpy: ParentalGatePresenterProtocol {
     private(set) var presentedURLs: [URL] = []
+    private(set) var presentedLinkTexts: [String?] = []
     private var pendingCompletion: ((Bool) -> Void)?
     
-    func presentGate(for url: URL, completion: @escaping (Bool) -> Void) {
+    func presentGate(for url: URL, linkText: String?, completion: @escaping (Bool) -> Void) {
         presentedURLs.append(url)
+        presentedLinkTexts.append(linkText)
         pendingCompletion = completion
     }
     

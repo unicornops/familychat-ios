@@ -245,6 +245,11 @@ struct MessageText: UIViewRepresentable {
             textView.selectedTextRange = nil
         }
         
+        /// Family Chat: no "Look Up"/"Translate"/"Search Web" (text is selectable on Mac), they'd bypass the parental gate.
+        func textView(_ textView: UITextView, editMenuForTextIn range: NSRange, suggestedActions: [UIMenuElement]) -> UIMenu? {
+            ParentalGateEditMenu.menu(from: suggestedActions)
+        }
+        
         func textView(_ textView: UITextView, primaryActionFor textItem: UITextItem, defaultAction: UIAction) -> UIAction? {
             if case .link(let url) = textItem.content {
                 return .init(title: defaultAction.title,
@@ -269,10 +274,25 @@ struct MessageText: UIViewRepresentable {
                 let copyLink = UIAction(title: L10n.actionCopyLink) { _ in
                     UIPasteboard.general.url = url
                 }
-                return .init(preview: nil, menu: UIMenu(children: [copyLink]))
+                // Sharing is user-initiated and not a link out, so it stays ungated.
+                let shareLink = UIAction(title: L10n.actionShare) { _ in
+                    Self.presentShareSheet(for: url, from: textView)
+                }
+                return .init(preview: nil, menu: UIMenu(children: [copyLink, shareLink]))
             default:
                 return nil
             }
+        }
+        
+        private static func presentShareSheet(for url: URL, from textView: UITextView) {
+            var presenter = textView.window?.rootViewController
+            while let presented = presenter?.presentedViewController {
+                presenter = presented
+            }
+            
+            let activityViewController = UIActivityViewController(activityItems: [url], applicationActivities: nil)
+            activityViewController.popoverPresentationController?.sourceView = textView
+            presenter?.present(activityViewController, animated: true)
         }
     }
 }

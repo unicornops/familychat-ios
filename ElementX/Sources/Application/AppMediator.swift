@@ -12,10 +12,12 @@ import UIKit
 class AppMediator: AppMediatorProtocol {
     let windowManager: WindowManagerProtocol
     let networkMonitor: NetworkMonitorProtocol
+    private let parentalGate: ParentalGate
     
-    init(windowManager: WindowManagerProtocol, networkMonitor: NetworkMonitorProtocol) {
+    init(windowManager: WindowManagerProtocol, networkMonitor: NetworkMonitorProtocol, parentalGate: ParentalGate) {
         self.windowManager = windowManager
         self.networkMonitor = networkMonitor
+        self.parentalGate = parentalGate
     }
     
     /// UIApplication.State won't update if we store this e.g. in the constructor
@@ -44,9 +46,14 @@ class AppMediator: AppMediatorProtocol {
         application.endBackgroundTask(identifier)
     }
     
-    /// Family Chat: goes through the parental gate, as every link leaving the app must.
     func open(_ url: URL) {
-        ParentalGate.shared.openExternalURL(url)
+        parentalGate.openExternalURL(url)
+    }
+    
+    func open(_ url: URL, completion: @escaping (Bool) -> Void) {
+        parentalGate.openExternalURL(url) { outcome in
+            completion(outcome != .notOpened)
+        }
     }
     
     func openAppSettings() {

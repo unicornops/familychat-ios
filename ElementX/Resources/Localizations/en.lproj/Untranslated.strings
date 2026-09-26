@@ -15,9 +15,9 @@
 "screen_parental_gate_answer_label" = "Your answer";
 "screen_parental_gate_answer_placeholder" = "Type the answer in digits";
 "screen_parental_gate_destination" = "This opens %1$@ outside the app.";
+"screen_parental_gate_link_text_mismatch" = "Careful: the link text shows “%1$@”, but it opens %2$@.";
 "screen_parental_gate_message" = "This link leaves Family Chat. Ask a grown-up to answer the question below to continue.";
 "screen_parental_gate_question_multiply" = "What is %1$@ times %2$@?";
-"screen_parental_gate_question_type_number" = "Type the number %1$@ in digits.";
 "screen_parental_gate_title" = "Ask a grown-up";
 "screen_parental_gate_wrong_answer" = "That’s not right. Here’s a new question.";
 "screen_search_empty_state_message" = "Search for chats and messages";

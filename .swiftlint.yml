@@ -72,10 +72,22 @@ custom_rules:
     message: "Please use the UIColor token directly to ensure the colour scheme is honoured."
     severity: warning
 
+  # Family Chat: the parental gate (family-chat#232 decision 10). A regex can't catch every aliased or
+  # multi-line call, so reviews still need to look for new ways of opening URLs.
   external_url_open:
-    regex: "(\\bUIApplication\\.shared\\.open\\(|\\bapplication\\.open\\(|\\bSFSafariViewController\\(|\\bLink\\(destination:)"
+    regex: "(\\bUIApplication\\s*\\.shared\\s*\\.open\\b|\\bapplication\\s*\\.open\\s*\\(|\\bSFSafariViewController\\b|\\bLink\\s*\\(|\\.systemAction\\b)"
     match_kinds: identifier
-    message: "Family Chat: links out of the app must use ParentalGate.shared.openExternalURL (Kids Category parental gate, family-chat#232 decision 10)."
+    message: "Family Chat: links out of the app must use ParentalGate.openExternalURL or AppMediatorProtocol.open (Kids Category parental gate, family-chat#232 decision 10)."
+    severity: error
+
+  embedded_browser:
+    regex: "\\b(ASWebAuthenticationSession|WKWebView)\\s*\\("
+    match_kinds: identifier
+    excluded:
+      - "ElementX/Sources/Screens/Authentication/OAuthAuthenticationPresenter\\.swift"
+      - "ElementX/Sources/Screens/Settings/AccountSettings/OAuthAccountSettingsPresenter\\.swift"
+      - "ElementX/Sources/Screens/CallScreen/View/CallScreen\\.swift"
+    message: "Family Chat: a new web view or web authentication session can leave the app without the parental gate; review it and add it to this rule's allowlist."
     severity: error
 
   print_deprecation:

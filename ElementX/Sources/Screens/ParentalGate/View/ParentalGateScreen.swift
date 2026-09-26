@@ -68,6 +68,12 @@ struct ParentalGateScreen: View {
                     .font(.compound.bodyMD)
                     .foregroundStyle(.compound.textSecondary)
             }
+            
+            if let linkTextWarning = model.linkTextWarning {
+                Text(linkTextWarning)
+                    .font(.compound.bodyMDSemibold)
+                    .foregroundStyle(.compound.textCriticalPrimary)
+            }
         }
         .fixedSize(horizontal: false, vertical: true)
     }
@@ -117,7 +123,7 @@ struct ParentalGateScreen: View {
 
 struct ParentalGateScreen_Previews: PreviewProvider {
     static let model = ParentalGateScreenModel(destination: "https://safechat.family/privacy/",
-                                               makeChallenge: { _ in .init(kind: .typeNumber(647)) },
+                                               makeChallenge: { _ in .init(multiplicand: 23, multiplier: 7) },
                                                completion: { _ in })
     
     static var previews: some View {

@@ -12,20 +12,35 @@ import SwiftUI
 /// Presents the parental gate as a sheet in its own window above everything else.
 ///
 /// A separate window lets the gate appear from anywhere (SwiftUI sheets, share sheets, Quick Look,
-/// secondary windows) without touching SwiftUI's presentation state. The gate is cancelled when the app
-/// goes to the background, so coming back to it always starts with a new question.
+/// secondary windows) without touching SwiftUI's presentation state. It is shown in the scene holding the
+/// key window and cancelled when that scene goes to the background or is disconnected, so the gate can't
+/// be left waiting forever and coming back to it always starts with a new question.
 final class ParentalGateWindowPresenter: ParentalGatePresenterProtocol {
-    private var window: UIWindow?
-    private var backgroundObserver: AnyCancellable?
+    private let notificationCenter: NotificationCenter
+    private let windowSceneProvider: @MainActor () -> UIWindowScene?
     
-    func presentGate(for url: URL, completion: @escaping (Bool) -> Void) {
-        guard window == nil, let windowScene = Self.activeWindowScene else {
+    private var window: UIWindow?
+    private var sceneObserver: AnyCancellable?
+    
+    /// Whether a gate is currently on screen.
+    var isPresenting: Bool {
+        window != nil
+    }
+    
+    init(notificationCenter: NotificationCenter = .default,
+         windowSceneProvider: @escaping @MainActor () -> UIWindowScene? = ParentalGateWindowPresenter.keyWindowScene) {
+        self.notificationCenter = notificationCenter
+        self.windowSceneProvider = windowSceneProvider
+    }
+    
+    func presentGate(for url: URL, linkText: String?, completion: @escaping (Bool) -> Void) {
+        guard window == nil, let windowScene = windowSceneProvider() else {
             MXLog.error("Unable to present the parental gate.")
             completion(false)
             return
         }
         
-        let previousKeyWindow = windowScene.keyWindow
+        let previousKeyWindow = windowScene.windows.first(where: \.isKeyWindow)
         let rootViewController = UIViewController()
         rootViewController.view.backgroundColor = .clear
         
@@ -38,12 +53,13 @@ final class ParentalGateWindowPresenter: ParentalGatePresenterProtocol {
         self.window = window
         window.makeKeyAndVisible()
         
-        let model = ParentalGateScreenModel(destination: url) { [weak self] passed in
+        let model = ParentalGateScreenModel(destination: url, linkText: linkText) { [weak self] passed in
             self?.dismiss(restoringKeyWindow: previousKeyWindow)
             completion(passed)
         }
         
-        backgroundObserver = NotificationCenter.default.publisher(for: UIApplication.didEnterBackgroundNotification)
+        sceneObserver = notificationCenter.publisher(for: UIScene.didEnterBackgroundNotification, object: windowScene)
+            .merge(with: notificationCenter.publisher(for: UIScene.didDisconnectNotification, object: windowScene))
             .sink { _ in
                 model.cancel()
             }
@@ -55,17 +71,18 @@ final class ParentalGateWindowPresenter: ParentalGatePresenterProtocol {
         rootViewController.present(hostingController, animated: true)
     }
     
-    // MARK: - Private
-    
-    private static var activeWindowScene: UIWindowScene? {
+    /// The foreground scene that holds the key window, so the gate appears where the user tapped on iPad and Mac.
+    static func keyWindowScene() -> UIWindowScene? {
         let windowScenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
-        return windowScenes.first { $0.activationState == .foregroundActive && $0.keyWindow != nil }
+        return windowScenes.first { $0.activationState == .foregroundActive && $0.windows.contains(where: \.isKeyWindow) }
+            ?? windowScenes.first { $0.windows.contains(where: \.isKeyWindow) }
             ?? windowScenes.first { $0.activationState == .foregroundActive }
-            ?? windowScenes.first
     }
     
+    // MARK: - Private
+    
     private func dismiss(restoringKeyWindow previousKeyWindow: UIWindow?) {
-        backgroundObserver = nil
+        sceneObserver = nil
         
         guard let window else { return }
         self.window = nil
@@ -73,10 +90,13 @@ final class ParentalGateWindowPresenter: ParentalGatePresenterProtocol {
         window.rootViewController?.dismiss(animated: true)
         
         // Let the sheet animate away before removing its window.
-        Task {
+        Task { [weak self] in
             try? await Task.sleep(for: .milliseconds(500))
             window.isHidden = true
-            previousKeyWindow?.makeKey()
+            // A new gate may have been opened meanwhile; it keeps the key window.
+            if self?.window == nil {
+                previousKeyWindow?.makeKey()
+            }
         }
     }
 }
