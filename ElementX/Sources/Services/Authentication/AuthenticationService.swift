@@ -347,8 +347,8 @@ class AuthenticationService: AuthenticationServiceProtocol {
             } catch RemoteSettingsError.elementProRequired(let serverName) {
                 progressSubject.send(completion: .failure(.elementProRequired(serverName: serverName)))
             } catch HomeserverAllowlistError.notAllowed {
-                progressSubject.send(completion: .failure(.qrCodeError(.providerNotAllowed(scannedProvider: scannedServerNameOrBaseUrl,
-                                                                                            allowedProviders: appSettings.accountProviders))))
+                let error = QRCodeLoginError.providerNotAllowed(scannedProvider: scannedServerNameOrBaseUrl, allowedProviders: appSettings.accountProviders)
+                progressSubject.send(completion: .failure(.qrCodeError(error)))
             } catch {
                 MXLog.error("QRCode login unknown error: \(error)")
                 progressSubject.send(completion: .failure(.qrCodeError(.unknown)))
