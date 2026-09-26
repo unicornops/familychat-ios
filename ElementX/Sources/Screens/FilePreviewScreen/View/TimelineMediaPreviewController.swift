@@ -376,6 +376,8 @@ private struct CaptionView: View {
     var body: some View {
         if let mediaItem = currentItem.mediaItem, mediaItem.hasCaption {
             CaptionScrollView(mediaItem: mediaItem)
+                // Family Chat: hosted outside the app's environment, so link taps need the parental gate here.
+                .environment(\.openURL, ParentalGate.shared.openURLAction)
                 .transition(.move(edge: .bottom).combined(with: .opacity))
         }
     }

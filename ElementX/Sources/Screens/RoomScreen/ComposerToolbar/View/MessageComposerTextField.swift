@@ -188,6 +188,11 @@ private struct UITextViewWrapper: UIViewRepresentable {
             pasteHandler(providers)
         }
         
+        /// Family Chat: no "Look Up"/"Translate"/"Search Web", they'd leave the app without the parental gate.
+        func textView(_ textView: UITextView, editMenuForTextIn range: NSRange, suggestedActions: [UIMenuElement]) -> UIMenu? {
+            ParentalGateEditMenu.menu(from: suggestedActions)
+        }
+        
         func textViewDidChangeSelection(_ textView: UITextView) {
             DispatchQueue.main.async {
                 if self.selectedRange.wrappedValue != textView.selectedRange {

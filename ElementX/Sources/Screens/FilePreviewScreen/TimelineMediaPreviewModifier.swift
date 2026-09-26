@@ -122,6 +122,12 @@ private struct MediaPreviewViewController: UIViewControllerRepresentable {
             .disabled
         }
         
+        /// Family Chat: links tapped inside a previewed document go through the parental gate.
+        func previewController(_ controller: QLPreviewController, shouldOpen url: URL, for item: any QLPreviewItem) -> Bool {
+            ParentalGate.shared.openExternalURL(url)
+            return false
+        }
+        
         func previewController(_ controller: QLPreviewController, transitionViewFor item: any QLPreviewItem) -> UIView? {
             sourceView
         }

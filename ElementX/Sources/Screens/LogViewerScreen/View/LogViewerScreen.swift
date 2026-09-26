@@ -59,6 +59,12 @@ private struct PreviewView: UIViewControllerRepresentable {
         func previewController(_ controller: QLPreviewController, editingModeFor previewItem: QLPreviewItem) -> QLPreviewItemEditingMode {
             .disabled
         }
+        
+        /// Family Chat: links tapped inside a previewed document go through the parental gate.
+        func previewController(_ controller: QLPreviewController, shouldOpen url: URL, for item: any QLPreviewItem) -> Bool {
+            ParentalGate.shared.openExternalURL(url)
+            return false
+        }
     }
 }
 

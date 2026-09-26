@@ -30,6 +30,12 @@ struct Application: App {
         }
         
         SceneDelegate.windowManager = appCoordinator.windowManager
+        
+        // Family Chat: the app's own links bypass the parental gate, everything else goes through it.
+        let coordinator: AppCoordinatorProtocol = appCoordinator
+        ParentalGate.shared.internalURLHandler = { url in
+            coordinator.handleDeepLink(url, isExternalURL: false, windowType: nil)
+        }
     }
     
     var body: some Scene {
@@ -109,7 +115,9 @@ struct Application: App {
                 return .handled
             }
             
-            return .systemAction
+            // Family Chat: links leaving the app need the parental gate.
+            ParentalGate.shared.openExternalURL(url)
+            return .handled
         }
     }
     
@@ -128,9 +136,10 @@ struct Application: App {
     
     /// https://github.com/element-hq/element-x-ios/issues/1824
     /// Avoid opening universal links in other app variants and infinite loops between them
+    /// Family Chat: behind the parental gate like every other link out of the app.
     private func openURLInSystemBrowser(_ originalURL: URL) {
         guard var urlComponents = URLComponents(url: originalURL, resolvingAgainstBaseURL: true) else {
-            openURL(originalURL)
+            ParentalGate.shared.openExternalURL(originalURL)
             return
         }
         
@@ -140,10 +149,10 @@ struct Application: App {
         urlComponents.queryItems = queryItems
         
         guard let url = urlComponents.url else {
-            openURL(originalURL)
+            ParentalGate.shared.openExternalURL(originalURL)
             return
         }
         
-        openURL(url)
+        ParentalGate.shared.openExternalURL(url)
     }
 }

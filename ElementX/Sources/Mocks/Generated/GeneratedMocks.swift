@@ -1075,6 +1075,30 @@ nonisolated class AppMediatorMock: AppMediatorProtocol, @unchecked Sendable {
         openReceivedInvocationsLock.withLock { openUnderlyingReceivedInvocations.append(url) }
         openClosure?(url)
     }
+    //MARK: - open
+
+    private let openCompletionCallsCountLock = NSLock()
+    private nonisolated(unsafe) var openCompletionUnderlyingCallsCount = 0
+    var openCompletionCallsCount: Int {
+        get { openCompletionCallsCountLock.withLock { openCompletionUnderlyingCallsCount } }
+        set { openCompletionCallsCountLock.withLock { openCompletionUnderlyingCallsCount = newValue } }
+    }
+    var openCompletionCalled: Bool {
+        return openCompletionCallsCount > 0
+    }
+    private let openCompletionReceivedArgumentsLock = NSLock()
+    private nonisolated(unsafe) var openCompletionUnderlyingReceivedArguments: (url: URL, completion: (Bool) -> Void)?
+    var openCompletionReceivedArguments: (url: URL, completion: (Bool) -> Void)? {
+        get { openCompletionReceivedArgumentsLock.withLock { openCompletionUnderlyingReceivedArguments } }
+        set { openCompletionReceivedArgumentsLock.withLock { openCompletionUnderlyingReceivedArguments = newValue } }
+    }
+    nonisolated(unsafe) var openCompletionClosure: ((URL, @escaping (Bool) -> Void) -> Void)?
+
+    func open(_ url: URL, completion: @escaping (Bool) -> Void) {
+        openCompletionCallsCountLock.withLock { openCompletionUnderlyingCallsCount += 1 }
+        openCompletionReceivedArguments = (url: url, completion: completion)
+        openCompletionClosure?(url, completion)
+    }
     //MARK: - openAppSettings
 
     private let openAppSettingsCallsCountLock = NSLock()

@@ -44,6 +44,28 @@ internal nonisolated enum UntranslatedL10n {
   internal static var screenOnboardingSignInCodeRejectedMessage: String { return UntranslatedL10n.tr("Untranslated", "screen_onboarding_sign_in_code_rejected_message") }
   /// This sign-in code cannot be used
   internal static var screenOnboardingSignInCodeRejectedTitle: String { return UntranslatedL10n.tr("Untranslated", "screen_onboarding_sign_in_code_rejected_title") }
+  /// Your answer
+  internal static var screenParentalGateAnswerLabel: String { return UntranslatedL10n.tr("Untranslated", "screen_parental_gate_answer_label") }
+  /// Type the answer in digits
+  internal static var screenParentalGateAnswerPlaceholder: String { return UntranslatedL10n.tr("Untranslated", "screen_parental_gate_answer_placeholder") }
+  /// This opens %1$@ outside the app.
+  internal static func screenParentalGateDestination(_ p1: Any) -> String {
+    return UntranslatedL10n.tr("Untranslated", "screen_parental_gate_destination", String(describing: p1))
+  }
+  /// Careful: the link text shows “%1$@”, but it opens %2$@.
+  internal static func screenParentalGateLinkTextMismatch(_ p1: Any, _ p2: Any) -> String {
+    return UntranslatedL10n.tr("Untranslated", "screen_parental_gate_link_text_mismatch", String(describing: p1), String(describing: p2))
+  }
+  /// This link leaves Family Chat. Ask a grown-up to answer the question below to continue.
+  internal static var screenParentalGateMessage: String { return UntranslatedL10n.tr("Untranslated", "screen_parental_gate_message") }
+  /// What is %1$@ times %2$@?
+  internal static func screenParentalGateQuestionMultiply(_ p1: Any, _ p2: Any) -> String {
+    return UntranslatedL10n.tr("Untranslated", "screen_parental_gate_question_multiply", String(describing: p1), String(describing: p2))
+  }
+  /// Ask a grown-up
+  internal static var screenParentalGateTitle: String { return UntranslatedL10n.tr("Untranslated", "screen_parental_gate_title") }
+  /// That’s not right. Here’s a new question.
+  internal static var screenParentalGateWrongAnswer: String { return UntranslatedL10n.tr("Untranslated", "screen_parental_gate_wrong_answer") }
   /// Search for chats and messages
   internal static var screenSearchEmptyStateMessage: String { return UntranslatedL10n.tr("Untranslated", "screen_search_empty_state_message") }
   /// Start searching...

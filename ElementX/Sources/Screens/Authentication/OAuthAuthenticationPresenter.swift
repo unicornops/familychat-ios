@@ -75,7 +75,14 @@ class OAuthAuthenticationPresenter: NSObject {
             if authenticationURL.scheme == "https" || authenticationURL.scheme == "http" {
                 session.start()
             } else {
-                appMediator.open(authenticationURL)
+                // Family Chat: another app is behind the parental gate; not passing it cancels the sign-in.
+                appMediator.open(authenticationURL) { [weak self] opened in
+                    guard !opened, let self, let activeRequest else { return }
+                    self.activeRequest = nil
+                    activeRequest.continuation.resume(returning: Response(url: nil,
+                                                                          isExternal: false,
+                                                                          error: ASWebAuthenticationSessionError(.canceledLogin)))
+                }
             }
         }
         

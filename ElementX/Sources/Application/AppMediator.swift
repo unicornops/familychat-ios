@@ -12,10 +12,12 @@ import UIKit
 class AppMediator: AppMediatorProtocol {
     let windowManager: WindowManagerProtocol
     let networkMonitor: NetworkMonitorProtocol
+    private let parentalGate: ParentalGate
     
-    init(windowManager: WindowManagerProtocol, networkMonitor: NetworkMonitorProtocol) {
+    init(windowManager: WindowManagerProtocol, networkMonitor: NetworkMonitorProtocol, parentalGate: ParentalGate) {
         self.windowManager = windowManager
         self.networkMonitor = networkMonitor
+        self.parentalGate = parentalGate
     }
     
     /// UIApplication.State won't update if we store this e.g. in the constructor
@@ -45,7 +47,13 @@ class AppMediator: AppMediatorProtocol {
     }
     
     func open(_ url: URL) {
-        application.open(url, options: [:], completionHandler: nil)
+        parentalGate.openExternalURL(url)
+    }
+    
+    func open(_ url: URL, completion: @escaping (Bool) -> Void) {
+        parentalGate.openExternalURL(url) { outcome in
+            completion(outcome != .notOpened)
+        }
     }
     
     func openAppSettings() {

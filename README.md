@@ -35,6 +35,7 @@ endorsed by, or supported by Element.
   under `*.safechat.family`; `account_provider` may be the family's own domain. A used or expired code falls back
   to the password form for `account_provider`, which (like a typed server) must resolve under `*.safechat.family`;
   the password never goes to `hs` directly. Contract: `docs/client-login-links.md` in unicornops/family-chat.
+- Every link that leaves the app goes through a parental gate (see [Parental gate](#parental-gate)).
 - Push notifications go through our own gateway at `push.safechat.family`.
 - PostHog analytics, Sentry and MapTiler are disabled (no keys are shipped).
 - Element's commercial licence offer (`LICENSE-COMMERCIAL`), the `Enterprise` submodule and the
@@ -43,6 +44,46 @@ endorsed by, or supported by Element.
 The fork deliberately keeps the upstream directory layout, target names and Xcode project name
 (`ElementX`) so that merges from upstream stay cheap. Only the user-visible name and the bundle
 identifiers change.
+
+## Parental gate
+
+Family Chat is listed in Apple's Kids Category (age band 9–11), so App Review guideline 1.3 requires a
+parental gate before any link out of the app or anything purchasable (unicornops/family-chat#232 decision 10).
+The gate asks a multiplication written in words, a two-digit number from 13 to 49 (never a round ten) times
+a single digit from 3 to 9, e.g. "What is twenty-three times seven?", answered in digits. It is shown to
+every account, draws a new question on every presentation and after every wrong answer, closes after three
+wrong answers, has no timer, and supports VoiceOver and Dynamic Type. The code lives in
+[`ElementX/Sources/Screens/ParentalGate/`](ElementX/Sources/Screens/ParentalGate).
+
+**Rule for new code: open anything outside the app with `AppMediatorProtocol.open(_:)` (or
+`ParentalGate.openExternalURL(_:)` where no app mediator can be injected).** This applies to web links,
+`mailto:`/`tel:`/`sms:` and other apps' URL schemes, and to the planned control panel settings entry and GIF
+attribution. SwiftUI views can keep using the `openURL` environment action, which the app routes through the
+gate; views hosted outside the app's environment (for example inside Quick Look) should set
+`.environment(\.openURL, ParentalGate.shared.openURLAction)`. Two SwiftLint rules back this up:
+`external_url_open` rejects `UIApplication.shared.open`, `application.open(`, `SFSafariViewController`,
+`Link(` and `.systemAction`, and `embedded_browser` rejects new `WKWebView(`/`ASWebAuthenticationSession(`
+outside the files already reviewed. A regex can't catch aliased or unusual calls, so reviews still need to
+watch for new ways of opening URLs.
+
+Not gated:
+- Links the app routes itself, i.e. whatever `AppRouteURLParser` recognises: matrix.to and other permalinks,
+  `app.safechat.family` links, links on `safechat.family` (any path) that carry an `account_provider` query
+  item, and the same behind the app's own URL scheme. Other `safechat.family` links, `/app/…` without
+  `account_provider` included, are gated and open in the browser with `no_universal_links=true`; the AASA on
+  safechat.family must exclude that query item or iOS hands them straight back to the app.
+- iOS's own Settings pages for this app (permissions, notifications).
+- Sign-in and account pages shown in `ASWebAuthenticationSession` (the family's own auth server on OAuth
+  homeservers, of which there are none yet). Handing sign-in to another app is gated, and not passing the gate
+  cancels the sign-in.
+- User-initiated sharing and saving: share sheets (including "Share…" on a message link) and "Save to Files".
+
+Known gaps (accepted risk): the system text edit menu can offer "Look Up", "Translate" and "Search Web",
+which leave the app. They are removed from the caption composer and from message text, but not from the main
+rich-text composer (its `UITextView` delegate belongs to the matrix-rich-text-editor package), SwiftUI
+selectable text (`.textSelection(.enabled)` in the timeline item menu, room details, settings and avatar headers) or
+other system text fields, which offer no hook to change that menu. The app sells nothing; anything
+purchasable added later must also sit behind the gate.
 
 ## Build instructions
 

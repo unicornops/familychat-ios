@@ -256,6 +256,14 @@ struct CallView: UIViewRepresentable {
             return .grant
         }
         
+        /// Family Chat: no link previews or link menus ("Open in Safari") in calls, they'd bypass the parental gate.
+        /// `allowsLinkPreview` has to stay on for video rendering (see above), so the menu is refused here instead.
+        func webView(_ webView: WKWebView,
+                     contextMenuConfigurationForElement elementInfo: WKContextMenuElementInfo,
+                     completionHandler: @escaping @MainActor @Sendable (UIContextMenuConfiguration?) -> Void) {
+            completionHandler(nil)
+        }
+        
         // MARK: - WKNavigationDelegate
         
         func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction) async -> WKNavigationActionPolicy {
