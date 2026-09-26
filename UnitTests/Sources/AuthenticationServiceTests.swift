@@ -406,7 +406,7 @@ struct AuthenticationServiceTests {
         
         // When the user then enters a domain that resolves elsewhere, and a server without any usable login.
         await #expect(throws: AuthenticationServiceError.homeserverNotAllowed) { try await service.configure(for: "evil.com", flow: .login).get() }
-        await #expect(throws: AuthenticationServiceError.loginNotSupported) { try await service.configure(for: "server.net", flow: .login).get() }
+        await #expect(throws: AuthenticationServiceError.loginNotSupported) { try await service.configure(for: "nologin.safechat.family", flow: .login).get() }
         
         // Then the family server stays configured, and its stores weren't deleted.
         #expect(service.homeserver.value.address == "smith.safechat.family")
@@ -527,6 +527,13 @@ struct AuthenticationServiceTests {
                                                                                                oAuthLoginURL: nil,
                                                                                                supportsOAuthCreatePrompt: false,
                                                                                                supportsPasswordLogin: true))
+        // A family homeserver without any login flow the app supports.
+        configuration.homeserverClients["nologin.safechat.family"] = ClientSDKMock(.init(serverName: "nologin.safechat.family",
+                                                                                         homeserverURL: "https://nologin.safechat.family",
+                                                                                         slidingSyncVersion: .native,
+                                                                                         oAuthLoginURL: nil,
+                                                                                         supportsOAuthCreatePrompt: false,
+                                                                                         supportsPasswordLogin: false))
         clientFactory = ClientFactoryMock(configuration)
         homeserverClients = configuration.homeserverClients
         
