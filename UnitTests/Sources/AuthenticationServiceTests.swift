@@ -7,6 +7,7 @@
 // Please see LICENSE files in the repository root for full details.
 //
 
+import Combine
 @testable import ElementX
 import Foundation
 import MatrixRustSDKMocks
@@ -19,6 +20,8 @@ struct AuthenticationServiceTests {
     var userSessionStore: UserSessionStoreMock!
     var encryptionKeyProvider: MockEncryptionKeyProvider!
     var service: AuthenticationService!
+    var clientFactory: ClientFactoryMock!
+    var homeserverClients: [String: ClientSDKMock] = [:]
     
     @Test
     mutating func passwordLogin() async throws {
@@ -392,17 +395,111 @@ struct AuthenticationServiceTests {
     
     @Test
     mutating func refusedDomainDoesNotReplaceTheConfiguredServer() async throws {
-        // Given a family server that is configured already.
+        // Given a family server that is configured already, whose stores exist on disk.
         try await setup(serverAddress: "evil.com", allowOtherAccountProviders: false)
+        let familyClient = try #require(homeserverClients["smith.safechat.family"])
         try await service.configure(for: "smith.safechat.family", flow: .login).get()
+        let familyDirectories = try #require(clientFactory.makeAuthenticationClientHomeserverAddressSessionDirectoriesPassphraseClientSessionDelegateAppSettingsAppHooksReceivedArguments?.sessionDirectories)
+        try FileManager.default.createDirectory(at: familyDirectories.dataDirectory, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: familyDirectories.cacheDirectory, withIntermediateDirectories: true)
+        defer { familyDirectories.delete() }
         
-        // When the user then enters a domain that resolves elsewhere.
+        // When the user then enters a domain that resolves elsewhere, and a server without any usable login.
         await #expect(throws: AuthenticationServiceError.homeserverNotAllowed) { try await service.configure(for: "evil.com", flow: .login).get() }
+        await #expect(throws: AuthenticationServiceError.loginNotSupported) { try await service.configure(for: "server.net", flow: .login).get() }
         
-        // Then a password login still goes to the family server, never to evil.com.
-        _ = await service.login(username: "@kid:evil.com", password: "12345678", initialDeviceName: nil, deviceID: nil)
-        #expect(client.loginUsernamePasswordInitialDeviceNameDeviceIdCallsCount == 0)
+        // Then the family server stays configured, and its stores weren't deleted.
         #expect(service.homeserver.value.address == "smith.safechat.family")
+        #expect(FileManager.default.directoryExists(at: familyDirectories.dataDirectory))
+        #expect(FileManager.default.directoryExists(at: familyDirectories.cacheDirectory))
+        
+        // And a password login goes to the family server with those stores, never to evil.com.
+        _ = try await service.login(username: "alice", password: "12345678", initialDeviceName: nil, deviceID: nil).get()
+        #expect(client.loginUsernamePasswordInitialDeviceNameDeviceIdCallsCount == 0)
+        #expect(familyClient.loginUsernamePasswordInitialDeviceNameDeviceIdCallsCount == 1)
+        #expect(userSessionStore.userSessionForSessionDirectoriesPassphraseReceivedArguments?.sessionDirectories == familyDirectories)
+    }
+    
+    @Test
+    mutating func loginMovingTheClientOutsideTheAllowlistIsRefused() async throws {
+        // Given a family server whose login response points the client elsewhere (`well_known.m.homeserver`).
+        try await setup(serverAddress: "smith.safechat.family", allowOtherAccountProviders: false)
+        try await service.configure(for: "smith.safechat.family", flow: .login).get()
+        let familyClient = try #require(client)
+        familyClient.loginUsernamePasswordInitialDeviceNameDeviceIdClosure = { [weak familyClient] _, _, _, _ in
+            familyClient?.homeserverReturnValue = "https://evil.com"
+            familyClient?.userIdReturnValue = "@alice:smith.safechat.family"
+        }
+        
+        // When signing in.
+        let result = await service.login(username: "alice", password: "12345678", initialDeviceName: nil, deviceID: nil)
+        
+        // Then the new session is logged out again and never stored.
+        #expect(throws: AuthenticationServiceError.homeserverNotAllowed) { try result.get() }
+        #expect(familyClient.logoutCallsCount == 1)
+        #expect(userSessionStore.userSessionForSessionDirectoriesPassphraseCallsCount == 0)
+    }
+    
+    @Test
+    mutating func signInCodeSessionMovedOutsideTheAllowlistIsDiscarded() async throws {
+        // Given a sign-in code whose restored session ends up pointing outside the allowlist.
+        let exchanger = LoginTokenExchangerMock(.init(result: .success(.mockAna)))
+        try await setup(serverAddress: "https://smith.safechat.family", loginTokenExchanger: exchanger, allowOtherAccountProviders: false)
+        let familyClient = try #require(client)
+        familyClient.restoreSessionSessionClosure = { [weak familyClient] _ in
+            familyClient?.homeserverReturnValue = "https://evil.com"
+        }
+        
+        let result = await service.loginWithToken("syl_code",
+                                                  homeserverURL: "https://smith.safechat.family",
+                                                  accountProvider: "smith.safechat.family",
+                                                  expectedUserID: "@ana:smith.safechat.family",
+                                                  initialDeviceName: nil)
+        
+        // Then the session is logged out and never stored.
+        #expect(throws: AuthenticationServiceError.homeserverNotAllowed) { try result.get() }
+        #expect(familyClient.logoutCallsCount == 1)
+        #expect(exchanger.logoutCallsCount == 1)
+        #expect(userSessionStore.userSessionForSessionDirectoriesPassphraseCallsCount == 0)
+    }
+    
+    @Test
+    mutating func qrCodeForADisallowedServerIsRefused() async throws {
+        // Given the app locked to *.safechat.family and a QR code from a device signed in to evil.com.
+        try await setup(serverAddress: "evil.com", allowOtherAccountProviders: false)
+        
+        // When scanning it.
+        let publisher = service.loginWithQRCode(data: Self.reciprocateQRCode(serverName: "evil.com"))
+        var cancellable: AnyCancellable?
+        let error: AuthenticationServiceError? = await withCheckedContinuation { continuation in
+            cancellable = publisher.sink { completion in
+                if case .failure(let error) = completion {
+                    continuation.resume(returning: error)
+                } else {
+                    continuation.resume(returning: nil)
+                }
+            } receiveValue: { _ in }
+        }
+        cancellable?.cancel()
+        
+        // Then the login is refused once evil.com's homeserver is resolved, before any QR login starts.
+        #expect(error == .qrCodeError(.providerNotAllowed(scannedProvider: "evil.com", allowedProviders: ["*.safechat.family"])))
+        #expect(clientFactory.makeAuthenticationClientHomeserverAddressSessionDirectoriesPassphraseClientSessionDelegateAppSettingsAppHooksReceivedArguments?.homeserverAddress == "evil.com")
+        #expect(client.newLoginWithQrCodeHandlerOauthConfigurationCallsCount == 0)
+    }
+    
+    /// An MSC4108 QR code from a device that is signed in to `serverName` ("reciprocate" intent).
+    private static func reciprocateQRCode(serverName: String) -> Data {
+        func lengthPrefixed(_ string: String) -> Data {
+            let bytes = Data(string.utf8)
+            return Data([UInt8(bytes.count >> 8), UInt8(bytes.count & 0xFF)]) + bytes
+        }
+        var data = Data("MATRIX".utf8)
+        data.append(contentsOf: [0x02, 0x04]) // version 2, reciprocate
+        data.append(Data(repeating: 0x2A, count: 32)) // ephemeral Curve25519 public key
+        data.append(lengthPrefixed("https://rendezvous.example/abcdef"))
+        data.append(lengthPrefixed(serverName))
+        return data
     }
     
     @Test
@@ -430,7 +527,8 @@ struct AuthenticationServiceTests {
                                                                                                oAuthLoginURL: nil,
                                                                                                supportsOAuthCreatePrompt: false,
                                                                                                supportsPasswordLogin: true))
-        let clientFactory = ClientFactoryMock(configuration)
+        clientFactory = ClientFactoryMock(configuration)
+        homeserverClients = configuration.homeserverClients
         
         client = configuration.homeserverClients[serverAddress]
         encryption = EncryptionSDKMock()

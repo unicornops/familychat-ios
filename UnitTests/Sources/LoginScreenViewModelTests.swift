@@ -244,6 +244,8 @@ struct LoginScreenViewModelTests {
         #expect(context.alertInfo?.message == UntranslatedL10n.screenChangeServerErrorNotFamilyChatServer)
         #expect(matrixDotOrg.homeserverLoginDetailsCallsCount == 0)
         #expect(service.homeserver.value.address == "smith.safechat.family")
+        // And the refused Matrix ID is cleared, so its password can't go to the family server instead.
+        #expect(context.username == "")
         #expect(!context.viewState.isLoading)
     }
     
@@ -285,6 +287,7 @@ struct LoginScreenViewModelTests {
         #expect(context.alertInfo?.message == UntranslatedL10n.screenChangeServerErrorNotFamilyChatServer)
         #expect(evil.homeserverLoginDetailsCallsCount == 0)
         #expect(evil.loginUsernamePasswordInitialDeviceNameDeviceIdCallsCount == 0)
+        #expect(context.username == "")
     }
     
     @Test

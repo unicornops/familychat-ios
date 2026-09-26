@@ -225,11 +225,11 @@ class AuthenticationStartScreenViewModel: AuthenticationStartScreenViewModelType
                                                fallbackHomeserverURL: classicAppAccount.homeserverURL)
             }
         } else if let serverName = state.serverName {
-            // Family Chat: a sign-in link's `hs` is the family's homeserver itself, already checked against the account
-            // providers, whereas its `account_provider` may be the family's own domain (`smith.ie`). So the password
-            // sign-in (e.g. after a failed code) goes straight to `hs`, with the login hint pre-filling the username.
-            let homeserverAddress = provisioningParameters?.signInCodeHomeserverURL?.absoluteString ?? serverName
-            await configureAccountProvider(homeserverAddress, loginHint: provisioningParameters?.loginHint)
+            // Family Chat: the password sign-in (also after a failed sign-in code) goes to `account_provider` through
+            // discovery, never to the link's `hs`: `configure` only accepts it when it resolves to an allowed homeserver.
+            // Sending the password to `hs` would let a crafted link (`account_provider=smith.ie`, someone else's `hs`,
+            // a bogus code) collect the password of the pre-filled account. There is deliberately no fallback to `hs`.
+            await configureAccountProvider(serverName, loginHint: provisioningParameters?.loginHint)
         } else {
             actionsSubject.send(.login) // No need to configure anything here, continue the flow.
         }

@@ -21,13 +21,6 @@ extension ClientFactoryMock {
                                                oAuthLoginURL: nil,
                                                supportsOAuthCreatePrompt: false,
                                                supportsPasswordLogin: true)),
-            // Family Chat: a sign-in link's `hs`, as the password fallback after a failed sign-in code configures it.
-            "https://example.com": ClientSDKMock(.init(serverName: "example.com",
-                                                       homeserverURL: "https://example.com",
-                                                       slidingSyncVersion: .native,
-                                                       oAuthLoginURL: nil,
-                                                       supportsOAuthCreatePrompt: false,
-                                                       supportsPasswordLogin: true)),
             "company.com": ClientSDKMock(.init(serverName: "company.com",
                                                homeserverURL: "https://matrix.company.com",
                                                slidingSyncVersion: .native,

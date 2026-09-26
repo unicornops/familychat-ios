@@ -13,6 +13,10 @@ import MatrixRustSDK
 
 class AuthenticationService: AuthenticationServiceProtocol {
     private var client: ClientProtocol?
+    /// Family Chat: the server name `client` was built for, needed to re-check its homeserver after sign-in.
+    private var clientServerName = ""
+    /// The directories of `client`'s stores. A new client is built into new directories, and only replaces these
+    /// once it has been accepted, so a refused or failed server never discards the configured client's stores.
     private var sessionDirectories: SessionDirectories
     private let passphrase: String
     
@@ -78,7 +82,7 @@ class AuthenticationService: AuthenticationServiceProtocol {
         do {
             var homeserver = LoginHomeserver(address: homeserverAddress, loginMode: .unknown)
             
-            let client = try await makeClient(homeserverAddress: homeserverAddress)
+            let (client, clientDirectories) = try await makeClient(homeserverAddress: homeserverAddress)
             let loginDetails = await client.homeserverLoginDetails()
             
             homeserver.loginMode = if loginDetails.supportsOauthLogin() {
@@ -90,13 +94,17 @@ class AuthenticationService: AuthenticationServiceProtocol {
             }
             
             if flow == .login, homeserver.loginMode == .unsupported {
+                clientDirectories.delete()
                 return .failure(.loginNotSupported)
             }
             if flow == .register, !homeserver.loginMode.supportsOAuthFlow {
+                clientDirectories.delete()
                 return .failure(.registrationNotSupported)
             }
             
+            adoptSessionDirectories(clientDirectories)
             self.client = client
+            clientServerName = homeserverAddress
             self.flow = flow
             homeserverSubject.send(homeserver)
             return .success(())
@@ -143,8 +151,11 @@ class AuthenticationService: AuthenticationServiceProtocol {
         guard let client else { return .failure(.failedLoggingIn) }
         do {
             try await client.loginWithOauthCallback(callbackUrl: callbackURL.absoluteString)
+            guard await isHomeserverStillAllowed(client, serverName: clientServerName) else {
+                return .failure(.homeserverNotAllowed)
+            }
             await verifyClientIfPossible(client: client)
-            return await userSession(for: client)
+            return await userSession(for: client, sessionDirectories: sessionDirectories, serverName: clientServerName)
         } catch MatrixRustSDK.OAuthError.Cancelled {
             return .failure(.oAuthError(.userCancellation))
         } catch {
@@ -158,6 +169,10 @@ class AuthenticationService: AuthenticationServiceProtocol {
         do {
             try await client.login(username: username, password: password, initialDeviceName: initialDeviceName, deviceId: deviceID)
             
+            guard await isHomeserverStillAllowed(client, serverName: clientServerName) else {
+                return .failure(.homeserverNotAllowed)
+            }
+            
             let refreshToken = try? client.session().refreshToken
             if refreshToken != nil {
                 MXLog.warning("Refresh token found for a non OAuth session, can't restore session, logging out")
@@ -167,7 +182,7 @@ class AuthenticationService: AuthenticationServiceProtocol {
             
             await verifyClientIfPossible(client: client)
             
-            return await userSession(for: client)
+            return await userSession(for: client, sessionDirectories: sessionDirectories, serverName: clientServerName)
         } catch let ClientError.MatrixApi(errorKind, _, _, _) {
             MXLog.error("Failed logging in with error kind: \(errorKind)")
             switch errorKind {
@@ -200,11 +215,18 @@ class AuthenticationService: AuthenticationServiceProtocol {
         defer { isRedeemingSignInCode = false }
         
         let client: ClientProtocol
+        let clientDirectories: SessionDirectories
         let credentials: LoginTokenCredentials
+        // The new client's stores are only kept when it signs in; any configured client keeps its own until then.
+        var unusedClientDirectories: SessionDirectories?
+        defer { unusedClientDirectories?.delete() }
         do {
             // A fresh client for the homeserver named by the link: the sign-in code needs no server selection first.
             // Built before the code is spent, so a homeserver the app can't use doesn't burn it.
-            client = try await makeClient(homeserverAddress: homeserverURL.absoluteString)
+            let newClient = try await makeClient(homeserverAddress: homeserverURL.absoluteString)
+            client = newClient.0
+            clientDirectories = newClient.1
+            unusedClientDirectories = newClient.1
             
             guard !Task.isCancelled else {
                 MXLog.warning("Sign-in code redemption cancelled before the code was redeemed.")
@@ -270,9 +292,12 @@ class AuthenticationService: AuthenticationServiceProtocol {
                 return await discardSession(.failedLoggingIn)
             }
             
-            switch await userSession(for: client) {
+            switch await userSession(for: client, sessionDirectories: clientDirectories, serverName: homeserverURL.absoluteString) {
             case .success(let userSession):
+                unusedClientDirectories = nil
+                adoptSessionDirectories(clientDirectories)
                 self.client = client
+                clientServerName = homeserverURL.absoluteString
                 // The bare server name, never `https://…`: it is what the user signed in to and what gets remembered.
                 homeserverSubject.send(LoginHomeserver(address: accountProvider, loginMode: .password))
                 return .success(userSession)
@@ -327,16 +352,21 @@ class AuthenticationService: AuthenticationServiceProtocol {
         }
         
         Task {
+            // The new client's stores, deleted again unless it signs in.
+            var unusedClientDirectories: SessionDirectories?
             do {
-                let client = try await makeClient(homeserverAddress: scannedServerNameOrBaseUrl)
+                let (client, clientDirectories) = try await makeClient(homeserverAddress: scannedServerNameOrBaseUrl)
+                unusedClientDirectories = clientDirectories
                 let qrCodeHandler = client.newLoginWithQrCodeHandler(oauthConfiguration: appSettings.oAuthConfiguration.rustValue)
                 try await qrCodeHandler.scan(qrCodeData: qrData, progressListener: listener)
                 
                 // Since the QR code login flow includes verification.
                 appSettings.hasRunIdentityConfirmationOnboarding = true
                 
-                switch await userSession(for: client) {
+                switch await userSession(for: client, sessionDirectories: clientDirectories, serverName: scannedServerNameOrBaseUrl) {
                 case .success(let userSession):
+                    unusedClientDirectories = nil
+                    adoptSessionDirectories(clientDirectories)
                     progressSubject.send(.signedIn(userSession))
                 case .failure(let error):
                     progressSubject.send(completion: .failure(error))
@@ -353,6 +383,7 @@ class AuthenticationService: AuthenticationServiceProtocol {
                 MXLog.error("QRCode login unknown error: \(error)")
                 progressSubject.send(completion: .failure(.qrCodeError(.unknown)))
             }
+            unusedClientDirectories?.delete()
         }
         
         return progressSubject.asCurrentValuePublisher()
@@ -369,39 +400,73 @@ class AuthenticationService: AuthenticationServiceProtocol {
     /// Family Chat: the one place authentication clients are built, and so the backstop every login goes through.
     /// `self.client` is only ever set to a client from here, so a password (`login`), an OAuth request
     /// (`urlForOAuthLogin`), a sign-in code (`loginWithToken`) or a QR login can only reach a homeserver that passed
-    /// `AppSettings.isAllowedHomeserver(serverName:homeserverURL:)`.
-    private func makeClient(homeserverAddress: String) async throws -> ClientProtocol {
-        // Use a fresh session directory each time the user enters a different server
-        // so that caches (e.g. server versions) are always fresh for the new server.
-        rotateSessionDirectory()
-        
-        let client = try await clientFactory.makeAuthenticationClient(homeserverAddress: homeserverAddress,
-                                                                      sessionDirectories: sessionDirectories,
-                                                                      passphrase: passphrase,
-                                                                      clientSessionDelegate: userSessionStore.clientSessionDelegate,
-                                                                      appSettings: appSettings,
-                                                                      appHooks: appHooks)
-        
-        // Building the client ran `.well-known` discovery (an unauthenticated GET to the server name) and nothing else.
-        // The allowlist is judged on where that resolved, not on the name: `smith.ie` delegating to
-        // `smith.safechat.family` is a family on its own domain, while one delegating anywhere else is refused here,
-        // before the homeserver is asked anything and before any credentials exist.
-        let resolvedHomeserverURL = client.homeserver()
-        guard appSettings.isAllowedHomeserver(serverName: homeserverAddress, homeserverURL: resolvedHomeserverURL) else {
-            MXLog.error("\(homeserverAddress) resolves to a homeserver outside the account providers (\(resolvedHomeserverURL)), refusing it.")
-            throw HomeserverAllowlistError.notAllowed
+    /// `AppSettings.isAllowedHomeserver(serverName:homeserverURL:)`. `userSession(for:sessionDirectories:serverName:)`
+    /// checks again once signed in, in case the login response moved the client elsewhere.
+    ///
+    /// The client gets fresh session directories (so that caches such as server versions are always fresh for the
+    /// new server), which are returned with it. They don't replace `sessionDirectories` here: the caller adopts them
+    /// with `adoptSessionDirectories(_:)` once the client is accepted, or deletes them. They're deleted when this throws.
+    private func makeClient(homeserverAddress: String) async throws -> (ClientProtocol, SessionDirectories) {
+        let clientDirectories = SessionDirectories()
+        do {
+            let client = try await clientFactory.makeAuthenticationClient(homeserverAddress: homeserverAddress,
+                                                                          sessionDirectories: clientDirectories,
+                                                                          passphrase: passphrase,
+                                                                          clientSessionDelegate: userSessionStore.clientSessionDelegate,
+                                                                          appSettings: appSettings,
+                                                                          appHooks: appHooks)
+            
+            // Building the client ran `.well-known` discovery (an unauthenticated GET to the server name) and then
+            // probed the resolved homeserver with an unauthenticated `GET /_matrix/client/versions`; nothing else has
+            // been sent. The allowlist is judged on where the name resolved, not on the name: `smith.ie` delegating to
+            // `smith.safechat.family` is a family on its own domain, while one delegating anywhere else is refused
+            // here, before the homeserver is asked for its login flows and before any credentials exist.
+            let resolvedHomeserverURL = client.homeserver()
+            guard appSettings.isAllowedHomeserver(serverName: homeserverAddress, homeserverURL: resolvedHomeserverURL) else {
+                MXLog.error("\(homeserverAddress) resolves to a homeserver outside the account providers (\(resolvedHomeserverURL)), refusing it.")
+                throw HomeserverAllowlistError.notAllowed
+            }
+            try await appHooks.remoteSettingsHook.initializeCache(using: client, applyingTo: appSettings).get()
+            
+            return (appHooks.clientFactoryHook.updateAuthenticationClient(client), clientDirectories)
+        } catch {
+            clientDirectories.delete()
+            throw error
         }
-        try await appHooks.remoteSettingsHook.initializeCache(using: client, applyingTo: appSettings).get()
-        
-        return appHooks.clientFactoryHook.updateAuthenticationClient(client)
     }
     
-    private func rotateSessionDirectory() {
+    /// Makes `newDirectories` (those of a client that was just accepted) the service's, deleting the previous ones.
+    private func adoptSessionDirectories(_ newDirectories: SessionDirectories) {
+        guard newDirectories != sessionDirectories else { return }
         sessionDirectories.delete()
-        sessionDirectories = .init()
+        sessionDirectories = newDirectories
     }
     
-    private func userSession(for client: ClientProtocol) async -> Result<UserSessionProtocol, AuthenticationServiceError> {
+    /// Family Chat: whether `client`'s homeserver still passes the allowlist after signing in. The SDK follows the
+    /// login response's `well_known` (`m.homeserver.base_url`), which can point the client somewhere other than the
+    /// homeserver checked in `makeClient`, and the session (with that URL) would then be persisted and reopened at
+    /// launch unchecked. When it no longer passes, the new session is logged out (best effort).
+    private func isHomeserverStillAllowed(_ client: ClientProtocol, serverName: String) async -> Bool {
+        let homeserverURL = client.homeserver()
+        guard appSettings.isAllowedHomeserver(serverName: serverName, homeserverURL: homeserverURL) else {
+            MXLog.error("Signing in moved the client to a homeserver outside the account providers (\(homeserverURL)), logging out.")
+            do {
+                try await client.logout()
+            } catch {
+                MXLog.error("Failed logging out of the refused session: \(error)")
+            }
+            return false
+        }
+        return true
+    }
+    
+    private func userSession(for client: ClientProtocol,
+                             sessionDirectories: SessionDirectories,
+                             serverName: String) async -> Result<UserSessionProtocol, AuthenticationServiceError> {
+        // The one place a session is persisted: never for a homeserver outside the account providers.
+        guard await isHomeserverStillAllowed(client, serverName: serverName) else {
+            return .failure(.homeserverNotAllowed)
+        }
         switch await userSessionStore.userSession(for: client, sessionDirectories: sessionDirectories, passphrase: passphrase) {
         case .success(let clientProxy):
             return .success(clientProxy)

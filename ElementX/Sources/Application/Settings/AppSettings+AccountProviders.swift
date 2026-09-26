@@ -147,7 +147,8 @@ nonisolated extension AppSettings {
     /// The lower-cased host of an `https://` homeserver URL, or nil when the URL is anything else.
     ///
     /// The authority (everything up to the first `/`) must be a plain `hostname[:port]`: userinfo, `\`, `%`, `?`,
-    /// `#`, whitespace, IP literals and other schemes are refused rather than interpreted. Whatever follows the
+    /// `#`, whitespace, IPv6 literals and other schemes are refused rather than interpreted. An IPv4 address reads as
+    /// a hostname here and is returned; it then matches no wildcard rule. Whatever follows the
     /// authority is a path and doesn't affect the host.
     static func httpsHost(ofHomeserverURL url: String) -> String? {
         let value = url.lowercased()

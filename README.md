@@ -33,7 +33,8 @@ endorsed by, or supported by Element.
 - Provisioning links (`https://safechat.family/app/login?…`, or the same behind the app's own URL scheme) accept
   the control panel's sign-in code (`hs` + `token`) and redeem it with `m.login.token` against `hs`, which must be
   under `*.safechat.family`; `account_provider` may be the family's own domain. A used or expired code falls back
-  to the password form for `hs`. Contract: `docs/client-login-links.md` in unicornops/family-chat.
+  to the password form for `account_provider`, which (like a typed server) must resolve under `*.safechat.family`;
+  the password never goes to `hs` directly. Contract: `docs/client-login-links.md` in unicornops/family-chat.
 - Push notifications go through our own gateway at `push.safechat.family`.
 - PostHog analytics, Sentry and MapTiler are disabled (no keys are shipped).
 - Element's commercial licence offer (`LICENSE-COMMERCIAL`), the `Enterprise` submodule and the

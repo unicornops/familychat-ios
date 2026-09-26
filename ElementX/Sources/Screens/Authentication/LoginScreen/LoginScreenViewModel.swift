@@ -78,6 +78,8 @@ class LoginScreenViewModel: LoginScreenViewModelType, LoginScreenViewModelProtoc
             state.bindings.alertInfo = AlertInfo(id: .accountProviderNotAllowed,
                                                  title: L10n.commonServerNotSupported,
                                                  message: UntranslatedL10n.screenChangeServerErrorNotAllowed(appSettings.exampleAccountProvider))
+            // Clear out the refused Matrix ID so its password isn't sent to the server that is still configured.
+            state.bindings.username = ""
             return
         }
         
@@ -166,6 +168,8 @@ class LoginScreenViewModel: LoginScreenViewModelType, LoginScreenViewModelProtoc
             state.bindings.alertInfo = AlertInfo(id: .accountProviderNotAllowed,
                                                  title: L10n.commonServerNotSupported,
                                                  message: UntranslatedL10n.screenChangeServerErrorNotFamilyChatServer)
+            // Clear out the refused Matrix ID so its password isn't sent to the server that is still configured.
+            state.bindings.username = ""
         case .sessionTokenRefreshNotSupported:
             state.bindings.alertInfo = AlertInfo(id: .refreshTokenAlert,
                                                  title: L10n.commonServerNotSupported,

@@ -16,6 +16,7 @@ import UIKit
 final class AuthenticationStartScreenViewModelTests {
     var clientFactory: ClientFactoryMock!
     var client: ClientSDKMock!
+    var familyClient: ClientSDKMock!
     var evilClient: ClientSDKMock!
     var classicAppManager: ClassicAppManagerMock?
     var notificationCenter: NotificationCenter!
@@ -269,8 +270,7 @@ final class AuthenticationStartScreenViewModelTests {
         let continueAction = try #require(context.alertInfo?.primaryButton.action)
         continueAction()
         try await deferredAction.fulfill()
-        // Family Chat: straight to the link's `hs`, which for a family on its own domain differs from `account_provider`.
-        #expect(clientFactory.makeAuthenticationClientHomeserverAddressSessionDirectoriesPassphraseClientSessionDelegateAppSettingsAppHooksReceivedArguments?.homeserverAddress == "https://company.com")
+        #expect(clientFactory.makeAuthenticationClientHomeserverAddressSessionDirectoriesPassphraseClientSessionDelegateAppSettingsAppHooksReceivedArguments?.homeserverAddress == "company.com")
     }
     
     // MARK: - Custom domains (family-chat#254)
@@ -314,7 +314,7 @@ final class AuthenticationStartScreenViewModelTests {
     }
     
     @Test
-    func customDomainRejectedCodeFallsBackToPasswordOnTheHomeserver() async throws {
+    func customDomainRejectedCodeFallsBackToPasswordThroughDiscovery() async throws {
         // Given a custom-domain link whose code was already used.
         setAccountProviders(["*.safechat.family"])
         let exchanger = LoginTokenExchangerMock(.init(result: .failure(.rejected(errcode: "M_FORBIDDEN"))))
@@ -331,8 +331,37 @@ final class AuthenticationStartScreenViewModelTests {
         continueAction()
         try await deferredAction.fulfill()
         
-        // Then it goes to `hs` (not to the family's domain), with the username pre-filled from the hint.
-        #expect(clientFactory.makeAuthenticationClientHomeserverAddressSessionDirectoriesPassphraseClientSessionDelegateAppSettingsAppHooksReceivedArguments?.homeserverAddress == "https://smith.safechat.family")
+        // Then it goes to the family's domain through discovery (never straight to the link's `hs`), with the
+        // username pre-filled from the hint.
+        #expect(clientFactory.makeAuthenticationClientHomeserverAddressSessionDirectoriesPassphraseClientSessionDelegateAppSettingsAppHooksReceivedArguments?.homeserverAddress == "smith.ie")
+    }
+    
+    @Test
+    func passwordFallbackNeverGoesToTheLinksHomeserver() async throws {
+        // Given a crafted link: a family's domain and account, but someone else's (allowlisted) `hs` and a bogus code,
+        // with the family's domain resolving elsewhere than that `hs` (here: outside the allowlist altogether).
+        setAccountProviders(["*.safechat.family"])
+        let exchanger = LoginTokenExchangerMock(.init(result: .failure(.rejected(errcode: "M_FORBIDDEN"))))
+        await setupViewModel(provisioningParameters: .init(accountProvider: "evil.com",
+                                                           loginHint: "mxid:@kid:evil.com",
+                                                           hs: "smith.safechat.family",
+                                                           token: "syl_bogus"),
+                             supportsOAuth: false,
+                             loginTokenExchanger: exchanger)
+        let deferredRejection = deferFulfillment(context.observe(\.viewState.bindings.alertInfo)) { $0?.id == .signInCodeRejected }
+        try confirmSignInCode()
+        try await deferredRejection.fulfill()
+        
+        // When continuing to the password sign-in.
+        let deferredAlert = deferFulfillment(context.observe(\.viewState.bindings.alertInfo)) { $0?.id == .homeserverNotAllowed }
+        let continueAction = try #require(context.alertInfo?.primaryButton.action)
+        continueAction()
+        try await deferredAlert.fulfill()
+        
+        // Then the password form is never shown: discovery refused the domain and nothing fell back to `hs`.
+        let addresses = clientFactory.makeAuthenticationClientHomeserverAddressSessionDirectoriesPassphraseClientSessionDelegateAppSettingsAppHooksReceivedInvocations.map { $0.homeserverAddress }
+        #expect(addresses == ["https://smith.safechat.family", "evil.com"])
+        #expect(familyClient.loginUsernamePasswordInitialDeviceNameDeviceIdCallsCount == 0)
     }
     
     @Test
@@ -495,11 +524,11 @@ final class AuthenticationStartScreenViewModelTests {
                                      supportsPasswordLogin: supportsPasswordLogin))
         // Map both the server name and the homeserver URL so fallback lookups work.
         // Family Chat: a family on its own domain (`smith.ie` → smith.safechat.family), and a domain resolving elsewhere.
-        let familyClient = ClientSDKMock(.init(serverName: "smith.ie",
-                                               homeserverURL: "https://smith.safechat.family",
-                                               oAuthLoginURL: nil,
-                                               supportsOAuthCreatePrompt: false,
-                                               supportsPasswordLogin: true))
+        familyClient = ClientSDKMock(.init(serverName: "smith.ie",
+                                           homeserverURL: "https://smith.safechat.family",
+                                           oAuthLoginURL: nil,
+                                           supportsOAuthCreatePrompt: false,
+                                           supportsPasswordLogin: true))
         evilClient = ClientSDKMock(.init(serverName: "evil.com",
                                          homeserverURL: "https://evil.com",
                                          oAuthLoginURL: nil,
