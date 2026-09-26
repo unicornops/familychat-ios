@@ -18,6 +18,8 @@ internal nonisolated enum UntranslatedL10n {
   internal static func screenChangeServerErrorNotAllowed(_ p1: Any) -> String {
     return UntranslatedL10n.tr("Untranslated", "screen_change_server_error_not_allowed", String(describing: p1))
   }
+  /// This server isn't a Family Chat server
+  internal static var screenChangeServerErrorNotFamilyChatServer: String { return UntranslatedL10n.tr("Untranslated", "screen_change_server_error_not_family_chat_server") }
   /// Search
   internal static var screenHomeTabSearch: String { return UntranslatedL10n.tr("Untranslated", "screen_home_tab_search") }
   /// That sign-in code is for a different account than the one the link named, so you have not been signed in. Ask a parent for a new code, or sign in with your password.

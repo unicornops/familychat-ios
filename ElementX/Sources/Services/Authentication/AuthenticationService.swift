@@ -108,6 +108,8 @@ class AuthenticationService: AuthenticationServiceProtocol {
             return .failure(.slidingSyncNotAvailable)
         } catch RemoteSettingsError.elementProRequired(let serverName) {
             return .failure(.elementProRequired(serverName: serverName))
+        } catch HomeserverAllowlistError.notAllowed {
+            return .failure(.homeserverNotAllowed)
         } catch {
             MXLog.error("Failed configuring a server: \(error)")
             return .failure(.invalidHomeserverAddress)
@@ -315,7 +317,7 @@ class AuthenticationService: AuthenticationServiceProtocol {
             return progressSubject.asCurrentValuePublisher()
         }
         
-        // n.b. We deliberatley don't check whether the received server is in our appSettings.accountProviders
+        // Family Chat: unlike upstream, `makeClient` refuses a server that resolves outside the account providers.
         
         // The SDK calls the listener from arbitrary threads; onMainActor forwards the progress
         // updates on the main actor in FIFO order.
@@ -344,6 +346,9 @@ class AuthenticationService: AuthenticationServiceProtocol {
                 progressSubject.send(completion: .failure(error.serviceError))
             } catch RemoteSettingsError.elementProRequired(let serverName) {
                 progressSubject.send(completion: .failure(.elementProRequired(serverName: serverName)))
+            } catch HomeserverAllowlistError.notAllowed {
+                progressSubject.send(completion: .failure(.qrCodeError(.providerNotAllowed(scannedProvider: scannedServerNameOrBaseUrl,
+                                                                                            allowedProviders: appSettings.accountProviders))))
             } catch {
                 MXLog.error("QRCode login unknown error: \(error)")
                 progressSubject.send(completion: .failure(.qrCodeError(.unknown)))
@@ -361,6 +366,10 @@ class AuthenticationService: AuthenticationServiceProtocol {
     
     // MARK: - Private
     
+    /// Family Chat: the one place authentication clients are built, and so the backstop every login goes through.
+    /// `self.client` is only ever set to a client from here, so a password (`login`), an OAuth request
+    /// (`urlForOAuthLogin`), a sign-in code (`loginWithToken`) or a QR login can only reach a homeserver that passed
+    /// `AppSettings.isAllowedHomeserver(serverName:homeserverURL:)`.
     private func makeClient(homeserverAddress: String) async throws -> ClientProtocol {
         // Use a fresh session directory each time the user enters a different server
         // so that caches (e.g. server versions) are always fresh for the new server.
@@ -372,6 +381,16 @@ class AuthenticationService: AuthenticationServiceProtocol {
                                                                       clientSessionDelegate: userSessionStore.clientSessionDelegate,
                                                                       appSettings: appSettings,
                                                                       appHooks: appHooks)
+        
+        // Building the client ran `.well-known` discovery (an unauthenticated GET to the server name) and nothing else.
+        // The allowlist is judged on where that resolved, not on the name: `smith.ie` delegating to
+        // `smith.safechat.family` is a family on its own domain, while one delegating anywhere else is refused here,
+        // before the homeserver is asked anything and before any credentials exist.
+        let resolvedHomeserverURL = client.homeserver()
+        guard appSettings.isAllowedHomeserver(serverName: homeserverAddress, homeserverURL: resolvedHomeserverURL) else {
+            MXLog.error("\(homeserverAddress) resolves to a homeserver outside the account providers (\(resolvedHomeserverURL)), refusing it.")
+            throw HomeserverAllowlistError.notAllowed
+        }
         try await appHooks.remoteSettingsHook.initializeCache(using: client, applyingTo: appSettings).get()
         
         return appHooks.clientFactoryHook.updateAuthenticationClient(client)
@@ -472,6 +491,11 @@ class AuthenticationService: AuthenticationServiceProtocol {
     }
 }
 
+/// Family Chat: thrown by `makeClient` when the server resolves outside the account providers.
+private enum HomeserverAllowlistError: Error {
+    case notAllowed
+}
+
 private extension HumanQrLoginError {
     var serviceError: AuthenticationServiceError {
         switch self {
@@ -504,14 +528,16 @@ extension AuthenticationService {
         mock(classicAppManager: nil)
     }
     
+    /// Family Chat: pass the screens' `appSettings` so that the service judges servers by the same account providers.
     static func mock(classicAppManager: ClassicAppManagerProtocol?,
-                     loginTokenExchanger: LoginTokenExchangerProtocol = LoginTokenExchangerMock()) -> AuthenticationService {
+                     loginTokenExchanger: LoginTokenExchangerProtocol = LoginTokenExchangerMock(),
+                     appSettings: AppSettings = .volatile()) -> AuthenticationService {
         AuthenticationService(userSessionStore: UserSessionStoreMock(.init()),
                               encryptionKeyProvider: EncryptionKeyProvider(),
                               classicAppManager: classicAppManager,
                               clientFactory: ClientFactoryMock(.init()),
                               loginTokenExchanger: loginTokenExchanger,
-                              appSettings: .volatile(),
+                              appSettings: appSettings,
                               appHooks: AppHooks())
     }
 }

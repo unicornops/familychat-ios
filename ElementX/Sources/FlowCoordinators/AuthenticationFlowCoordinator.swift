@@ -128,11 +128,8 @@ class AuthenticationFlowCoordinator: FlowCoordinatorProtocol {
         
         switch appRoute {
         case .accountProvisioningLink(let linkParameters):
-            // Family Chat: links are honoured for any allowed account provider (`*.safechat.family`), not only when
-            // arbitrary providers are allowed as upstream requires. From here on only the canonical host that was
-            // checked is used, never the link's raw value.
-            guard let accountProvider = appSettings.allowedAccountProvider(linkParameters.accountProvider) else {
-                MXLog.error("Provisioning link for a disallowed account provider, ignoring.")
+            // Family Chat: see `AccountProvisioningParameters.allowed(by:)` for what is kept of the link.
+            guard let provisioningParameters = linkParameters.allowed(by: appSettings) else {
                 return
             }
             
@@ -141,25 +138,6 @@ class AuthenticationFlowCoordinator: FlowCoordinatorProtocol {
             guard !authenticationService.isRedeemingSignInCode else {
                 MXLog.warning("Ignoring a provisioning link while a sign-in code is being redeemed.")
                 return
-            }
-            
-            // A login hint for another server than the link's account provider is dropped: it would lead the
-            // password form (and the sign-in code's account check) to a server the link didn't name.
-            var loginHint = linkParameters.loginHint
-            if let hintedUserID = linkParameters.loginHintUserID,
-               AccountProvisioningParameters.serverName(ofUserID: hintedUserID) != accountProvider.lowercased() {
-                MXLog.error("Provisioning link's login hint names another server than its account provider, dropping the hint.")
-                loginHint = nil
-            }
-            
-            // A sign-in code is only redeemed against an allowed homeserver; otherwise the link degrades to the
-            // plain account provider + login hint prefill and the token goes nowhere.
-            let provisioningParameters = AccountProvisioningParameters(accountProvider: accountProvider,
-                                                                       loginHint: loginHint,
-                                                                       hs: linkParameters.hs.flatMap(appSettings.allowedAccountProvider),
-                                                                       token: linkParameters.token)
-            if linkParameters.hasSignInCode, !provisioningParameters.hasSignInCode {
-                MXLog.error("Provisioning link's sign-in code names a disallowed homeserver, dropping the code.")
             }
             
             if stateMachine.state != .startScreen {

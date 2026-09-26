@@ -18,6 +18,7 @@ struct LoginScreenViewModelTests {
     }
     
     var clientFactory: ClientFactoryMock!
+    var factoryConfiguration: ClientFactoryMock.Configuration!
     var service: AuthenticationServiceProtocol!
     
     @Test
@@ -228,19 +229,81 @@ struct LoginScreenViewModelTests {
     @Test
     mutating func matrixIDOnDisallowedServerIsRefused() async throws {
         // Given the app locked to *.safechat.family (the default).
-        await setupViewModel(allowOtherAccountProviders: false)
-        let callsBefore = clientFactory.makeAuthenticationClientHomeserverAddressSessionDirectoriesPassphraseClientSessionDelegateAppSettingsAppHooksCallsCount
+        await setupViewModel(homeserverAddress: "smith.safechat.family", allowOtherAccountProviders: false)
+        let matrixDotOrg = try #require(factoryConfiguration.homeserverClients["matrix.org"])
         
-        // When entering a Matrix ID on another server.
+        // When entering a Matrix ID on a server that doesn't resolve to a family server.
         let deferred = deferFulfillment(context.observe(\.viewState.bindings.alertInfo)) { $0 != nil }
         context.username = "@bob:matrix.org"
         context.send(viewAction: .parseUsername)
         try await deferred.fulfill()
         
-        // Then the sign-in is not moved to that server.
+        // Then the sign-in is not moved to that server: only discovery happened, the homeserver was never asked
+        // anything and the family server stays configured.
         #expect(context.alertInfo?.id == .accountProviderNotAllowed)
-        #expect(clientFactory.makeAuthenticationClientHomeserverAddressSessionDirectoriesPassphraseClientSessionDelegateAppSettingsAppHooksCallsCount == callsBefore)
+        #expect(context.alertInfo?.message == UntranslatedL10n.screenChangeServerErrorNotFamilyChatServer)
+        #expect(matrixDotOrg.homeserverLoginDetailsCallsCount == 0)
+        #expect(service.homeserver.value.address == "smith.safechat.family")
         #expect(!context.viewState.isLoading)
+    }
+    
+    @Test
+    mutating func matrixIDOnACustomDomainIsAccepted() async throws {
+        // Given the app locked to *.safechat.family, and `smith.ie` delegating to smith.safechat.family.
+        await setupViewModel(homeserverAddress: "smith.safechat.family", allowOtherAccountProviders: false)
+        let smithDotIE = try #require(factoryConfiguration.homeserverClients["smith.ie"])
+        
+        // When entering a Matrix ID on the family's own domain.
+        let deferred = deferFulfillment(context.observe(\.viewState.homeserver)) { $0.address == "smith.ie" }
+        context.username = "@kid:smith.ie"
+        context.send(viewAction: .parseUsername)
+        try await deferred.fulfill()
+        
+        // Then the sign-in moves to that domain and the password goes to the homeserver it resolved to.
+        #expect(context.alertInfo == nil)
+        #expect(context.viewState.loginMode == .password)
+        context.password = "12345678"
+        let deferredSignIn = deferFulfillment(viewModel.actions) { !$0.isConfiguredForOAuth } // i.e. signed in
+        context.send(viewAction: .next)
+        try await deferredSignIn.fulfill()
+        #expect(smithDotIE.loginUsernamePasswordInitialDeviceNameDeviceIdReceivedArguments?.username == "@kid:smith.ie")
+    }
+    
+    @Test
+    mutating func matrixIDOnADomainResolvingElsewhereSendsNoPassword() async throws {
+        // Given the app locked to *.safechat.family, and `evil.com` resolving to https://evil.com.
+        await setupViewModel(homeserverAddress: "smith.safechat.family", allowOtherAccountProviders: false)
+        let evil = try #require(factoryConfiguration.homeserverClients["evil.com"])
+        
+        // When entering a Matrix ID on it.
+        let deferred = deferFulfillment(context.observe(\.viewState.bindings.alertInfo)) { $0 != nil }
+        context.username = "@kid:evil.com"
+        context.send(viewAction: .parseUsername)
+        try await deferred.fulfill()
+        
+        // Then it is refused with an explanation before any login request.
+        #expect(context.alertInfo?.message == UntranslatedL10n.screenChangeServerErrorNotFamilyChatServer)
+        #expect(evil.homeserverLoginDetailsCallsCount == 0)
+        #expect(evil.loginUsernamePasswordInitialDeviceNameDeviceIdCallsCount == 0)
+    }
+    
+    @Test
+    mutating func matrixIDParserDifferentialsAreRefusedBeforeDiscovery() async throws {
+        // Given the app locked to *.safechat.family.
+        await setupViewModel(homeserverAddress: "smith.safechat.family", allowOtherAccountProviders: false)
+        
+        for username in ["@kid:evil.com\\.safechat.family", "@kid:evil.com\\@a.safechat.family", "@kid:user@smith.safechat.family"] {
+            let callsBefore = clientFactory.makeAuthenticationClientHomeserverAddressSessionDirectoriesPassphraseClientSessionDelegateAppSettingsAppHooksCallsCount
+            context.alertInfo = nil
+            context.username = username
+            context.send(viewAction: .parseUsername)
+            try await Task.sleep(for: .milliseconds(50))
+            
+            // Then the SDK never sees the server name.
+            #expect(clientFactory.makeAuthenticationClientHomeserverAddressSessionDirectoriesPassphraseClientSessionDelegateAppSettingsAppHooksCallsCount == callsBefore,
+                    Comment(rawValue: username))
+            #expect(service.homeserver.value.address == "smith.safechat.family", Comment(rawValue: username))
+        }
     }
     
     // MARK: - Helpers
@@ -273,7 +336,8 @@ struct LoginScreenViewModelTests {
                              analyticsTermsURL: appSettings.analyticsTermsURL,
                              mapTilerConfiguration: AppSettings.bundledMapTilerConfiguration)
         
-        clientFactory = ClientFactoryMock(.init())
+        factoryConfiguration = ClientFactoryMock.Configuration()
+        clientFactory = ClientFactoryMock(factoryConfiguration)
         service = AuthenticationService(userSessionStore: UserSessionStoreMock(.init()),
                                         encryptionKeyProvider: EncryptionKeyProvider(),
                                         classicAppManager: nil,

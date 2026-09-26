@@ -287,12 +287,141 @@ struct AuthenticationServiceTests {
         #expect(!service.isRedeemingSignInCode)
     }
     
+    // MARK: - Custom domains (family-chat#254)
+    
+    @Test
+    mutating func customDomainSignInCodeRedeemsAgainstTheHomeserver() async throws {
+        // Given the app locked to *.safechat.family and a link for a family on its own domain: the code is for
+        // `hs=smith.safechat.family`, the account is `@kid:smith.ie`.
+        let exchanger = LoginTokenExchangerMock(.init(result: .success(.mock(userID: "@kid:smith.ie"))))
+        try await setup(serverAddress: "https://smith.safechat.family", loginTokenExchanger: exchanger, allowOtherAccountProviders: false)
+        
+        // When redeeming it.
+        let result = await service.loginWithToken("syl_code",
+                                                  homeserverURL: "https://smith.safechat.family",
+                                                  accountProvider: "smith.ie",
+                                                  expectedUserID: "@kid:smith.ie",
+                                                  initialDeviceName: nil)
+        
+        // Then the code went to `hs`, the custom-domain account was accepted and the family's domain is remembered.
+        _ = try result.get()
+        #expect(exchanger.exchangeReceivedArguments?.homeserverURL == "https://smith.safechat.family")
+        #expect(client.restoreSessionSessionReceivedSession?.userId == "@kid:smith.ie")
+        #expect(exchanger.logoutCallsCount == 0)
+        #expect(service.homeserver.value.address == "smith.ie")
+    }
+    
+    @Test
+    mutating func customDomainSignInCodeWithoutHintAcceptsTheFamilyDomain() async throws {
+        // Given a custom-domain link without a login hint.
+        let exchanger = LoginTokenExchangerMock(.init(result: .success(.mock(userID: "@kid:smith.ie"))))
+        try await setup(serverAddress: "https://smith.safechat.family", loginTokenExchanger: exchanger, allowOtherAccountProviders: false)
+        
+        let result = await service.loginWithToken("syl_code",
+                                                  homeserverURL: "https://smith.safechat.family",
+                                                  accountProvider: "smith.ie",
+                                                  expectedUserID: nil,
+                                                  initialDeviceName: nil)
+        
+        // Then an account on the family's domain (the link's `account_provider`, not `hs`) is accepted.
+        _ = try result.get()
+        #expect(exchanger.logoutCallsCount == 0)
+    }
+    
+    @Test
+    mutating func customDomainSignInCodeForAnotherAccountIsDiscarded() async throws {
+        // Given custom-domain links whose code signs in to another account than the link named.
+        let cases: [(userID: String, expectedUserID: String?)] = [("@mallory:smith.ie", "@kid:smith.ie"),
+                                                                  // Without a hint the server must be `account_provider`, not `hs`.
+                                                                  ("@kid:smith.safechat.family", nil),
+                                                                  ("@kid:evil.com", nil)]
+        for testCase in cases {
+            let exchanger = LoginTokenExchangerMock(.init(result: .success(.mock(userID: testCase.userID))))
+            try await setup(serverAddress: "https://smith.safechat.family", loginTokenExchanger: exchanger, allowOtherAccountProviders: false)
+            
+            let result = await service.loginWithToken("syl_code",
+                                                      homeserverURL: "https://smith.safechat.family",
+                                                      accountProvider: "smith.ie",
+                                                      expectedUserID: testCase.expectedUserID,
+                                                      initialDeviceName: nil)
+            
+            // Then the session is logged out again and never stored.
+            #expect(throws: AuthenticationServiceError.signInCodeAccountMismatch, Comment(rawValue: testCase.userID)) { try result.get() }
+            #expect(exchanger.logoutCallsCount == 1, Comment(rawValue: testCase.userID))
+            #expect(client.restoreSessionSessionCallsCount == 0, Comment(rawValue: testCase.userID))
+            #expect(userSessionStore.userSessionForSessionDirectoriesPassphraseCallsCount == 0, Comment(rawValue: testCase.userID))
+        }
+    }
+    
+    @Test
+    mutating func customDomainResolvingToAFamilyServerIsAccepted() async throws {
+        // Given the app locked to *.safechat.family and `smith.ie` whose `.well-known` points at smith.safechat.family.
+        try await setup(serverAddress: "smith.ie", allowOtherAccountProviders: false)
+        
+        // When configuring it and signing in with the full Matrix ID.
+        try await service.configure(for: "smith.ie", flow: .login).get()
+        #expect(service.homeserver.value == .init(address: "smith.ie", loginMode: .password))
+        _ = try await service.login(username: "@kid:smith.ie", password: "12345678", initialDeviceName: nil, deviceID: nil).get()
+        
+        // Then the password went to that client.
+        #expect(client.loginUsernamePasswordInitialDeviceNameDeviceIdCallsCount == 1)
+        #expect(client.loginUsernamePasswordInitialDeviceNameDeviceIdReceivedArguments?.username == "@kid:smith.ie")
+    }
+    
+    @Test
+    mutating func domainResolvingOutsideTheAllowlistIsRefusedBeforeLogin() async throws {
+        // Given the app locked to *.safechat.family and `evil.com` resolving to https://evil.com.
+        try await setup(serverAddress: "evil.com", allowOtherAccountProviders: false)
+        
+        // When configuring it.
+        let result = await service.configure(for: "evil.com", flow: .login)
+        
+        // Then it is refused right after discovery: the homeserver isn't even asked for its login flows.
+        #expect(throws: AuthenticationServiceError.homeserverNotAllowed) { try result.get() }
+        #expect(client.homeserverLoginDetailsCallsCount == 0)
+        #expect(service.homeserver.value.loginMode == .unknown)
+        
+        // And a password login attempted anyway never reaches it, and neither does an OAuth request.
+        await #expect(throws: AuthenticationServiceError.failedLoggingIn) {
+            try await service.login(username: "@kid:evil.com", password: "12345678", initialDeviceName: nil, deviceID: nil).get()
+        }
+        #expect(client.loginUsernamePasswordInitialDeviceNameDeviceIdCallsCount == 0)
+        _ = await service.urlForOAuthLogin(loginHint: nil)
+        #expect(client.urlForOauthOauthConfigurationPromptLoginHintDeviceIdAdditionalScopesCallsCount == 0)
+    }
+    
+    @Test
+    mutating func refusedDomainDoesNotReplaceTheConfiguredServer() async throws {
+        // Given a family server that is configured already.
+        try await setup(serverAddress: "evil.com", allowOtherAccountProviders: false)
+        try await service.configure(for: "smith.safechat.family", flow: .login).get()
+        
+        // When the user then enters a domain that resolves elsewhere.
+        await #expect(throws: AuthenticationServiceError.homeserverNotAllowed) { try await service.configure(for: "evil.com", flow: .login).get() }
+        
+        // Then a password login still goes to the family server, never to evil.com.
+        _ = await service.login(username: "@kid:evil.com", password: "12345678", initialDeviceName: nil, deviceID: nil)
+        #expect(client.loginUsernamePasswordInitialDeviceNameDeviceIdCallsCount == 0)
+        #expect(service.homeserver.value.address == "smith.safechat.family")
+    }
+    
+    @Test
+    mutating func upstreamServersResolveOutsideTheAllowlist() async throws {
+        // Given the app locked to *.safechat.family.
+        try await setup(allowOtherAccountProviders: false)
+        
+        // Then matrix.org (which resolves to matrix-client.matrix.org) is refused as well.
+        await #expect(throws: AuthenticationServiceError.homeserverNotAllowed) { try await service.configure(for: "matrix.org", flow: .login).get() }
+        #expect(client.homeserverLoginDetailsCallsCount == 0)
+    }
+    
     // MARK: - Helpers
     
     private mutating func setup(serverAddress: String = "matrix.org",
                                 classicAppAccounts: [ClassicAppAccount] = [],
                                 availableSecrets: ClassicAppAccount.AvailableSecrets = .complete,
-                                loginTokenExchanger: LoginTokenExchangerProtocol = LoginTokenExchangerMock()) async throws {
+                                loginTokenExchanger: LoginTokenExchangerProtocol = LoginTokenExchangerMock(),
+                                allowOtherAccountProviders: Bool = true) async throws {
         var configuration: ClientFactoryMock.Configuration = .init()
         // A family homeserver, reached by its client-server URL as a sign-in link names it.
         configuration.homeserverClients["https://smith.safechat.family"] = ClientSDKMock(.init(serverName: "smith.safechat.family",
@@ -319,7 +448,7 @@ struct AuthenticationServiceTests {
                                         classicAppManager: classicAppManager,
                                         clientFactory: clientFactory,
                                         loginTokenExchanger: loginTokenExchanger,
-                                        appSettings: .volatile(),
+                                        appSettings: makeAppSettings(allowOtherAccountProviders: allowOtherAccountProviders),
                                         appHooks: AppHooks())
         
         if let classicAppAccount = service.classicAppAccount {
@@ -328,6 +457,34 @@ struct AuthenticationServiceTests {
             try #require(classicAppAccount.state.availableSecrets == availableSecrets)
         }
     }
+}
+
+/// Family Chat locks the app to `*.safechat.family`; upstream's tests use arbitrary servers, so they opt out.
+@MainActor
+private func makeAppSettings(allowOtherAccountProviders: Bool) -> AppSettings {
+    let appSettings = AppSettings.volatile()
+    appSettings.override(accountProviders: appSettings.accountProviders,
+                         allowOtherAccountProviders: allowOtherAccountProviders,
+                         hideBrandChrome: false,
+                         pushGatewayBaseURL: appSettings.pushGatewayBaseURL,
+                         oAuthRedirectURL: appSettings.oAuthRedirectURL,
+                         oAuthClientURIPath: appSettings.oAuthClientURIPath,
+                         websiteURL: appSettings.websiteURL,
+                         logoURL: appSettings.logoURL,
+                         copyrightURL: appSettings.copyrightURL,
+                         acceptableUseURL: appSettings.acceptableUseURL,
+                         privacyURL: appSettings.privacyURL,
+                         encryptionURL: appSettings.encryptionURL,
+                         deviceVerificationURL: appSettings.deviceVerificationURL,
+                         chatBackupDetailsURL: appSettings.chatBackupDetailsURL,
+                         identityPinningViolationDetailsURL: appSettings.identityPinningViolationDetailsURL,
+                         historySharingDetailsURL: appSettings.historySharingDetailsURL,
+                         elementWebHosts: appSettings.elementWebHosts,
+                         accountProvisioningHost: appSettings.accountProvisioningHost,
+                         bugReportApplicationID: appSettings.bugReportApplicationID,
+                         analyticsTermsURL: appSettings.analyticsTermsURL,
+                         mapTilerConfiguration: AppSettings.bundledMapTilerConfiguration)
+    return appSettings
 }
 
 struct MockEncryptionKeyProvider: EncryptionKeyProviderProtocol {

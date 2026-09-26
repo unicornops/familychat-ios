@@ -74,6 +74,8 @@ struct AuthenticationStartScreenViewStateBindings {
 
 enum AuthenticationStartScreenAlertType {
     case genericError
+    /// The server resolves to a homeserver outside the account providers (a domain that isn't a Family Chat family's).
+    case homeserverNotAllowed
     /// Asks the user to confirm the account a sign-in code signs in to before redeeming it.
     case signInCodeConfirmation
     /// The sign-in code signed in to another account than the link named; that session was discarded.

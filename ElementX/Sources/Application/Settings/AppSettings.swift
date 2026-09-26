@@ -144,7 +144,8 @@ final nonisolated class AppSettings: @unchecked Sendable {
     /// match the last part of the user ID. For example `example.com` and not `https://matrix.example.com`.
     ///
     /// Family Chat: an entry starting with `*.` matches every subdomain of its suffix (one family homeserver each,
-    /// `<slug>.safechat.family`). See `AppSettings+AccountProviders.swift` for the matching rules.
+    /// `<slug>.safechat.family`). A wildcard rule is matched against the homeserver URL a server name resolves to, so
+    /// a family's own domain delegating there is allowed too. See `AppSettings+AccountProviders.swift` for the rules.
     private(set) var accountProviders = ["*.safechat.family"]
     /// Whether or not the user is allowed to manually enter their own account provider or must select from one of `defaultAccountProviders`.
     private(set) var allowOtherAccountProviders = false

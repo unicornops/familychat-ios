@@ -38,6 +38,9 @@ enum AuthenticationServiceError: Error, Equatable {
     case sessionTokenRefreshNotSupported
     /// Family Chat: a sign-in code signed in to another account than the link named. The new session was discarded.
     case signInCodeAccountMismatch
+    /// Family Chat: the server resolves (through `.well-known`) to a homeserver outside the account providers, for
+    /// example a custom domain that doesn't delegate to `*.safechat.family`. Nothing but discovery was sent to it.
+    case homeserverNotAllowed
 }
 
 protocol AuthenticationServiceProtocol: QRCodeLoginServiceProtocol {
@@ -47,6 +50,9 @@ protocol AuthenticationServiceProtocol: QRCodeLoginServiceProtocol {
     var flow: AuthenticationFlow { get }
     
     /// Sets up the service for login on the specified homeserver address.
+    ///
+    /// Family Chat: fails with `.homeserverNotAllowed`, before any login request, when the address resolves to a
+    /// homeserver outside the account providers (see `AppSettings.isAllowedHomeserver(serverName:homeserverURL:)`).
     func configure(for homeserverAddress: String, flow: AuthenticationFlow) async -> Result<Void, AuthenticationServiceError>
     /// Performs login using OAuth for the current homeserver.
     func urlForOAuthLogin(loginHint: String?) async -> Result<OAuthAuthorizationDataProxy, AuthenticationServiceError>
@@ -68,7 +74,8 @@ protocol AuthenticationServiceProtocol: QRCodeLoginServiceProtocol {
     /// - Parameters:
     ///   - token: the login token; never logged, never persisted.
     ///   - homeserverURL: the `https://<hs>` base URL answering the client-server API for the family.
-    ///   - accountProvider: the family's server name, the link's `account_provider`.
+    ///   - accountProvider: the family's Matrix server name, the link's `account_provider`. For a family on its own
+    ///     domain that is the domain (`smith.ie`), not `homeserverURL`'s host, so accounts are checked against it.
     ///   - expectedUserID: the Matrix ID from the link's login hint, if any.
     ///   - initialDeviceName: the device name shown in the user's session list.
     func loginWithToken(_ token: String,

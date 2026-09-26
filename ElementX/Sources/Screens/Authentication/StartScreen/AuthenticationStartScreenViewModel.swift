@@ -43,8 +43,9 @@ class AuthenticationStartScreenViewModel: AuthenticationStartScreenViewModelType
         canReportProblem = isBugReportServiceEnabled
         
         let isQRCodeScanningSupported = !ProcessInfo.processInfo.isiOSAppOnMac
-        let classicAppAccountProvider = authenticationService.classicAppAccount?.serverName
-        let isClassicAppAccountAllowed = classicAppAccountProvider.map { appSettings.isAllowedAccountProvider($0) } ?? false
+        let isClassicAppAccountAllowed = authenticationService.classicAppAccount.map {
+            appSettings.isAllowedHomeserver(serverName: $0.serverName, homeserverURL: $0.homeserverURL.absoluteString)
+        } ?? false
         // A single wildcard rule (`*.safechat.family`) is not a server to sign in to: the user types their own.
         let pickableProviders = appSettings.pickableAccountProviders
         let lockedServerName = pickableProviders.count == 1 && !appSettings.hasWildcardAccountProvider ? pickableProviders[0] : nil
@@ -163,7 +164,7 @@ class AuthenticationStartScreenViewModel: AuthenticationStartScreenViewModelType
         }
         
         // Defence in depth: the flow coordinator already strips codes for hosts outside the account providers.
-        guard appSettings.isAllowedAccountProvider(hs) else {
+        guard appSettings.isAllowedHomeserverHost(hs) else {
             MXLog.error("Sign-in code refused: its homeserver is not an allowed account provider.")
             displaySignInCodeError(.signInCodeFailed)
             return
@@ -224,7 +225,11 @@ class AuthenticationStartScreenViewModel: AuthenticationStartScreenViewModelType
                                                fallbackHomeserverURL: classicAppAccount.homeserverURL)
             }
         } else if let serverName = state.serverName {
-            await configureAccountProvider(serverName, loginHint: provisioningParameters?.loginHint)
+            // Family Chat: a sign-in link's `hs` is the family's homeserver itself, already checked against the account
+            // providers, whereas its `account_provider` may be the family's own domain (`smith.ie`). So the password
+            // sign-in (e.g. after a failed code) goes straight to `hs`, with the login hint pre-filling the username.
+            let homeserverAddress = provisioningParameters?.signInCodeHomeserverURL?.absoluteString ?? serverName
+            await configureAccountProvider(homeserverAddress, loginHint: provisioningParameters?.loginHint)
         } else {
             actionsSubject.send(.login) // No need to configure anything here, continue the flow.
         }
@@ -234,7 +239,12 @@ class AuthenticationStartScreenViewModel: AuthenticationStartScreenViewModelType
         startLoading()
         defer { stopLoading() }
         
-        if case .failure = await authenticationService.configure(for: accountProvider, flow: .login) {
+        if case .failure(let error) = await authenticationService.configure(for: accountProvider, flow: .login) {
+            // Family Chat: a server that resolves outside the account providers is refused, never retried elsewhere.
+            if error == .homeserverNotAllowed {
+                displayHomeserverNotAllowed()
+                return
+            }
             // Try the fallback URL before showing an error.
             if let fallbackHomeserverURL,
                case .success = await authenticationService.configure(for: fallbackHomeserverURL.absoluteString, flow: .login) {
@@ -297,5 +307,11 @@ class AuthenticationStartScreenViewModel: AuthenticationStartScreenViewModelType
     
     private func displayError() {
         state.bindings.alertInfo = AlertInfo(id: .genericError)
+    }
+    
+    private func displayHomeserverNotAllowed() {
+        state.bindings.alertInfo = AlertInfo(id: .homeserverNotAllowed,
+                                             title: L10n.commonServerNotSupported,
+                                             message: UntranslatedL10n.screenChangeServerErrorNotFamilyChatServer)
     }
 }

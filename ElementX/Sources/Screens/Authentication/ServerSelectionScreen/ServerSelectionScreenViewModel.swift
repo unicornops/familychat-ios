@@ -112,10 +112,12 @@ class ServerSelectionScreenViewModel: ServerSelectionScreenViewModelType, Server
         // People often enter their Matrix ID here, so use the server name from it when they do.
         let serverNameOrAddress = (try? serverNameFromUserId(userId: userInput)) ?? userInput
         
-        // Family Chat: refuse servers outside the account providers before any network request, so neither a
-        // well-known lookup nor a password ever goes to a server we do not run. Only the canonical host that was
-        // checked goes on to the SDK, never the raw input, which the SDK's URL parser could read differently.
-        guard let homeserverAddress = appSettings.allowedAccountProvider(serverNameOrAddress) else {
+        // Family Chat: refuse anything that isn't plainly `hostname[:port]` before any network request. Only the
+        // canonical host goes on to the SDK, never the raw input, which the SDK's URL parser could read differently.
+        // The name itself may be anything (a family on its own domain types `smith.ie`): `configure` runs the
+        // `.well-known` discovery and refuses a name that resolves outside the account providers, before any
+        // password or OAuth request is made.
+        guard let homeserverAddress = appSettings.accountProviderServerName(serverNameOrAddress) else {
             MXLog.info("Homeserver not allowed by the account providers.")
             showFooterMessage(UntranslatedL10n.screenChangeServerErrorNotAllowed(appSettings.exampleAccountProvider))
             return
@@ -171,6 +173,8 @@ class ServerSelectionScreenViewModel: ServerSelectionScreenViewModelType, Server
         switch error {
         case .invalidServer, .invalidHomeserverAddress:
             showFooterMessage(L10n.screenChangeServerErrorInvalidHomeserver)
+        case .homeserverNotAllowed:
+            showFooterMessage(UntranslatedL10n.screenChangeServerErrorNotFamilyChatServer)
         case .invalidWellKnown(let error):
             state.bindings.alertInfo = AlertInfo(id: .invalidWellKnownAlert(error),
                                                  title: L10n.commonServerNotSupported,
