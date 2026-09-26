@@ -129,6 +129,44 @@ struct AccountProvisioningParameters: Hashable {
         guard let hs else { return nil }
         return URL(string: "https://\(hs)")
     }
+    
+    /// Family Chat: what the app may use of a provisioning link, or nil when it must be ignored altogether.
+    ///
+    /// Links are honoured for any canonical server name (`AppSettings.accountProviderServerName(_:)`), not only when
+    /// arbitrary providers are allowed as upstream requires: a family on its own domain has `account_provider=smith.ie`
+    /// and is served at `hs=<slug>.safechat.family`. The allowlist applies to the homeserver, not to that name:
+    /// - the sign-in code is kept only with an `hs` that matches the account providers itself, and is redeemed there;
+    /// - without a code, the password or OAuth sign-in to `account_provider` is refused by
+    ///   `AuthenticationService.configure` unless the name resolves to an allowed homeserver.
+    ///
+    /// A login hint naming another server than `account_provider` is dropped. From here on only canonical hosts are
+    /// used, never the link's raw values.
+    func allowed(by appSettings: AppSettings) -> AccountProvisioningParameters? {
+        guard let accountProvider = appSettings.accountProviderServerName(accountProvider) else {
+            MXLog.error("Provisioning link for a disallowed account provider, ignoring.")
+            return nil
+        }
+        
+        // A login hint for another server than the link's account provider would lead the password form (and the
+        // sign-in code's account check) to a server the link didn't name.
+        var loginHint = loginHint
+        if let hintedUserID = loginHintUserID,
+           Self.serverName(ofUserID: hintedUserID) != accountProvider.lowercased() {
+            MXLog.error("Provisioning link's login hint names another server than its account provider, dropping the hint.")
+            loginHint = nil
+        }
+        
+        // A sign-in code is only redeemed against an allowed homeserver; otherwise the link degrades to the plain
+        // account provider + login hint prefill and the token goes nowhere.
+        let allowedParameters = AccountProvisioningParameters(accountProvider: accountProvider,
+                                                              loginHint: loginHint,
+                                                              hs: hs.flatMap(appSettings.allowedHomeserverHost),
+                                                              token: token)
+        if hasSignInCode, !allowedParameters.hasSignInCode {
+            MXLog.error("Provisioning link's sign-in code names a disallowed homeserver, dropping the code.")
+        }
+        return allowedParameters
+    }
 }
 
 extension AccountProvisioningParameters: CustomStringConvertible {

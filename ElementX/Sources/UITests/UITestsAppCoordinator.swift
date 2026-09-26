@@ -140,7 +140,8 @@ class MockScreen: Identifiable {
         switch id {
         case .serverSelection:
             let navigationStackCoordinator = NavigationStackCoordinator()
-            let coordinator = ServerSelectionScreenCoordinator(parameters: .init(authenticationService: AuthenticationService.mock,
+            let authenticationService = AuthenticationService.mock(classicAppManager: nil, appSettings: appSettings)
+            let coordinator = ServerSelectionScreenCoordinator(parameters: .init(authenticationService: authenticationService,
                                                                                  authenticationFlow: .login,
                                                                                  appSettings: appSettings,
                                                                                  homeserverHistoryManager: HomeserverHistoryManager(appSettings: appSettings),
@@ -183,8 +184,9 @@ class MockScreen: Identifiable {
             // A sign-in code the (mock) homeserver refuses: the flow must explain and fall back to the password form.
             let authenticationService = id == .signInCodeAuthenticationFlow
                 ? AuthenticationService.mock(classicAppManager: nil,
-                                             loginTokenExchanger: LoginTokenExchangerMock(.init(result: .failure(.rejected(errcode: "M_FORBIDDEN")))))
-                : AuthenticationService.mock
+                                             loginTokenExchanger: LoginTokenExchangerMock(.init(result: .failure(.rejected(errcode: "M_FORBIDDEN")))),
+                                             appSettings: appSettings)
+                : AuthenticationService.mock(classicAppManager: nil, appSettings: appSettings)
             
             let flowCoordinator = AuthenticationFlowCoordinator(authenticationService: authenticationService,
                                                                 bugReportService: BugReportServiceMock(.init()),

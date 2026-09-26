@@ -19,6 +19,7 @@ struct ServerSelectionScreenViewModelTests {
     
     var appSettings: AppSettings!
     var client: ClientSDKMock!
+    var homeserverClients: [String: ClientSDKMock] = [:]
     var clientFactory: ClientFactoryMock!
     var service: AuthenticationServiceProtocol!
     var viewModel: ServerSelectionScreenViewModelProtocol!
@@ -361,15 +362,51 @@ struct ServerSelectionScreenViewModelTests {
         try setup(authenticationFlow: .login, allowOtherAccountProviders: false)
         #expect(appSettings.hasWildcardAccountProvider)
         
-        // When confirming a server outside the rule.
+        // When confirming a server that resolves outside the rule (matrix.org → matrix-client.matrix.org).
         context.homeserverAddress = "matrix.org"
         let deferred = deferFulfillment(context.observe(\.viewState.footerErrorMessage)) { $0 != nil }
         context.send(viewAction: .confirm)
         try await deferred.fulfill()
         
-        // Then it is refused before any network request, with an example of what is accepted.
-        #expect(context.viewState.footerErrorMessage?.contains("yourfamily.safechat.family") == true)
-        #expect(clientFactory.makeAuthenticationClientHomeserverAddressSessionDirectoriesPassphraseClientSessionDelegateAppSettingsAppHooksCallsCount == 0)
+        // Then it is refused once discovery shows where it lives, before the homeserver is asked anything.
+        #expect(context.viewState.footerErrorMessage == UntranslatedL10n.screenChangeServerErrorNotFamilyChatServer)
+        #expect(client.homeserverLoginDetailsCallsCount == 0)
+        #expect(service.homeserver.value.loginMode == .unknown)
+    }
+    
+    @Test
+    mutating func userInputAcceptsCustomDomainsResolvingToFamilyServers() async throws {
+        // Given the app locked to *.safechat.family, and `smith.ie` whose `.well-known` points at smith.safechat.family.
+        try setup(authenticationFlow: .login, allowOtherAccountProviders: false)
+        
+        // When the family types its own domain.
+        context.homeserverAddress = "smith.ie"
+        let deferred = deferFulfillment(viewModel.actions) { $0.isContinueWithPassword }
+        context.send(viewAction: .confirm)
+        try await deferred.fulfill()
+        
+        // Then it is configured as the server to sign in to.
+        #expect(clientFactory.makeAuthenticationClientHomeserverAddressSessionDirectoriesPassphraseClientSessionDelegateAppSettingsAppHooksReceivedArguments?.homeserverAddress == "smith.ie")
+        #expect(service.homeserver.value == .init(address: "smith.ie", loginMode: .password))
+        #expect(context.viewState.footerErrorMessage == nil)
+    }
+    
+    @Test
+    mutating func userInputRefusesDomainsResolvingElsewhere() async throws {
+        // Given the app locked to *.safechat.family, and `evil.com` resolving to https://evil.com.
+        try setup(authenticationFlow: .login, allowOtherAccountProviders: false)
+        let evil = try #require(homeserverClients["evil.com"])
+        
+        // When typing it.
+        context.homeserverAddress = "evil.com"
+        let deferred = deferFulfillment(context.observe(\.viewState.footerErrorMessage)) { $0 != nil }
+        context.send(viewAction: .confirm)
+        try await deferred.fulfill()
+        
+        // Then it is refused before any login request, with Family Chat's explanation.
+        #expect(context.viewState.footerErrorMessage == UntranslatedL10n.screenChangeServerErrorNotFamilyChatServer)
+        #expect(evil.homeserverLoginDetailsCallsCount == 0)
+        #expect(evil.loginUsernamePasswordInitialDeviceNameDeviceIdCallsCount == 0)
         #expect(service.homeserver.value.loginMode == .unknown)
     }
     
@@ -469,6 +506,7 @@ struct ServerSelectionScreenViewModelTests {
                                                                                               supportsOAuthCreatePrompt: false,
                                                                                               supportsPasswordLogin: true))
         client = factoryConfiguration.homeserverClients["matrix.org"]
+        homeserverClients = factoryConfiguration.homeserverClients
         clientFactory = ClientFactoryMock(factoryConfiguration)
         
         service = AuthenticationService(userSessionStore: UserSessionStoreMock(.init()),

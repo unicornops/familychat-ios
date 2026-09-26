@@ -1,6 +1,7 @@
 "screen_about_source_code" = "Source code";
 "screen_about_source_code_notice" = "Family Chat is a fork of Element X by Element (AGPL-3.0); source at https://github.com/unicornops/familychat-ios";
 "screen_change_server_error_not_allowed" = "You can only sign in to your family's own server, for example %1$@.";
+"screen_change_server_error_not_family_chat_server" = "This server isn't a Family Chat server";
 "screen_home_tab_search" = "Search";
 "screen_onboarding_sign_in_code_account_mismatch_message" = "That sign-in code is for a different account than the one the link named, so you have not been signed in. Ask a parent for a new code, or sign in with your password.";
 "screen_onboarding_sign_in_code_already_signed_in_message" = "To use this sign-in code for another account, sign out first and then open the code again.";

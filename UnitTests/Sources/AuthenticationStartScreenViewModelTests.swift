@@ -16,6 +16,8 @@ import UIKit
 final class AuthenticationStartScreenViewModelTests {
     var clientFactory: ClientFactoryMock!
     var client: ClientSDKMock!
+    var familyClient: ClientSDKMock!
+    var evilClient: ClientSDKMock!
     var classicAppManager: ClassicAppManagerMock?
     var notificationCenter: NotificationCenter!
     var appSettings: AppSettings!
@@ -271,6 +273,132 @@ final class AuthenticationStartScreenViewModelTests {
         #expect(clientFactory.makeAuthenticationClientHomeserverAddressSessionDirectoriesPassphraseClientSessionDelegateAppSettingsAppHooksReceivedArguments?.homeserverAddress == "company.com")
     }
     
+    // MARK: - Custom domains (family-chat#254)
+    
+    @Test
+    func customDomainSignInCodeRedeemsAgainstTheHomeserver() async throws {
+        // Given the app locked to *.safechat.family and a sign-in link for a family on its own domain.
+        setAccountProviders(["*.safechat.family"])
+        let exchanger = LoginTokenExchangerMock(.init(result: .success(.mock(userID: "@kid:smith.ie"))))
+        await setupViewModel(provisioningParameters: .kidCustomDomainSignInCode,
+                             supportsOAuth: false,
+                             loginTokenExchanger: exchanger)
+        #expect(context.viewState.serverName == "smith.ie")
+        #expect(context.alertInfo?.title.contains("@kid:smith.ie") == true)
+        
+        // When the user confirms the account.
+        let deferred = deferFulfillment(viewModel.actions) { $0.isSignedIn }
+        try confirmSignInCode()
+        
+        // Then the code is redeemed against `hs` and the custom-domain account is signed in.
+        try await deferred.fulfill()
+        #expect(exchanger.exchangeReceivedArguments?.homeserverURL == "https://smith.safechat.family")
+        #expect(exchanger.logoutCallsCount == 0)
+    }
+    
+    @Test
+    func customDomainSignInCodeForAnotherAccountIsDiscarded() async throws {
+        // Given a custom-domain link whose code signs in to another account.
+        setAccountProviders(["*.safechat.family"])
+        let exchanger = LoginTokenExchangerMock(.init(result: .success(.mock(userID: "@mallory:smith.ie"))))
+        await setupViewModel(provisioningParameters: .kidCustomDomainSignInCode,
+                             supportsOAuth: false,
+                             loginTokenExchanger: exchanger)
+        
+        let deferredAlert = deferFulfillment(context.observe(\.viewState.bindings.alertInfo)) { $0?.id == .signInCodeAccountMismatch }
+        try confirmSignInCode()
+        
+        // Then it is refused and logged out again.
+        try await deferredAlert.fulfill()
+        #expect(exchanger.logoutCallsCount == 1)
+    }
+    
+    @Test
+    func customDomainRejectedCodeFallsBackToPasswordThroughDiscovery() async throws {
+        // Given a custom-domain link whose code was already used.
+        setAccountProviders(["*.safechat.family"])
+        let exchanger = LoginTokenExchangerMock(.init(result: .failure(.rejected(errcode: "M_FORBIDDEN"))))
+        await setupViewModel(provisioningParameters: .kidCustomDomainSignInCode,
+                             supportsOAuth: false,
+                             loginTokenExchanger: exchanger)
+        let deferredAlert = deferFulfillment(context.observe(\.viewState.bindings.alertInfo)) { $0?.id == .signInCodeRejected }
+        try confirmSignInCode()
+        try await deferredAlert.fulfill()
+        
+        // When continuing to the password sign-in.
+        let deferredAction = deferFulfillment(viewModel.actions) { $0 == .loginDirectlyWithPassword(loginHint: "mxid:@kid:smith.ie") }
+        let continueAction = try #require(context.alertInfo?.primaryButton.action)
+        continueAction()
+        try await deferredAction.fulfill()
+        
+        // Then it goes to the family's domain through discovery (never straight to the link's `hs`), with the
+        // username pre-filled from the hint.
+        #expect(clientFactory.makeAuthenticationClientHomeserverAddressSessionDirectoriesPassphraseClientSessionDelegateAppSettingsAppHooksReceivedArguments?.homeserverAddress == "smith.ie")
+    }
+    
+    @Test
+    func passwordFallbackNeverGoesToTheLinksHomeserver() async throws {
+        // Given a crafted link: a family's domain and account, but someone else's (allowlisted) `hs` and a bogus code,
+        // with the family's domain resolving elsewhere than that `hs` (here: outside the allowlist altogether).
+        setAccountProviders(["*.safechat.family"])
+        let exchanger = LoginTokenExchangerMock(.init(result: .failure(.rejected(errcode: "M_FORBIDDEN"))))
+        await setupViewModel(provisioningParameters: .init(accountProvider: "evil.com",
+                                                           loginHint: "mxid:@kid:evil.com",
+                                                           hs: "smith.safechat.family",
+                                                           token: "syl_bogus"),
+                             supportsOAuth: false,
+                             loginTokenExchanger: exchanger)
+        let deferredRejection = deferFulfillment(context.observe(\.viewState.bindings.alertInfo)) { $0?.id == .signInCodeRejected }
+        try confirmSignInCode()
+        try await deferredRejection.fulfill()
+        
+        // When continuing to the password sign-in.
+        let deferredAlert = deferFulfillment(context.observe(\.viewState.bindings.alertInfo)) { $0?.id == .homeserverNotAllowed }
+        let continueAction = try #require(context.alertInfo?.primaryButton.action)
+        continueAction()
+        try await deferredAlert.fulfill()
+        
+        // Then the password form is never shown: discovery refused the domain and nothing fell back to `hs`.
+        let addresses = clientFactory.makeAuthenticationClientHomeserverAddressSessionDirectoriesPassphraseClientSessionDelegateAppSettingsAppHooksReceivedInvocations.map(\.homeserverAddress)
+        #expect(addresses == ["https://smith.safechat.family", "evil.com"])
+        #expect(familyClient.loginUsernamePasswordInitialDeviceNameDeviceIdCallsCount == 0)
+    }
+    
+    @Test
+    func customDomainLinkWithoutCodeIsJudgedByWhereItResolves() async throws {
+        // Given the app locked to *.safechat.family and a link for `smith.ie`, which delegates to smith.safechat.family.
+        setAccountProviders(["*.safechat.family"])
+        await setupViewModel(provisioningParameters: .init(accountProvider: "smith.ie", loginHint: "mxid:@kid:smith.ie"),
+                             supportsOAuth: false)
+        
+        // When tapping "Sign in to smith.ie".
+        let deferred = deferFulfillment(viewModel.actions) { $0 == .loginDirectlyWithPassword(loginHint: "mxid:@kid:smith.ie") }
+        context.send(viewAction: .login)
+        
+        // Then the password sign-in for that domain follows.
+        try await deferred.fulfill()
+        #expect(clientFactory.makeAuthenticationClientHomeserverAddressSessionDirectoriesPassphraseClientSessionDelegateAppSettingsAppHooksReceivedArguments?.homeserverAddress == "smith.ie")
+    }
+    
+    @Test
+    func linkForADomainResolvingElsewhereIsRefused() async throws {
+        // Given the app locked to *.safechat.family and a link for `evil.com`, which resolves to https://evil.com.
+        setAccountProviders(["*.safechat.family"])
+        await setupViewModel(provisioningParameters: .init(accountProvider: "evil.com", loginHint: "mxid:@kid:evil.com"),
+                             supportsOAuth: false)
+        
+        // When tapping "Sign in to evil.com".
+        let deferred = deferFulfillment(context.observe(\.viewState.bindings.alertInfo)) { $0 != nil }
+        context.send(viewAction: .login)
+        try await deferred.fulfill()
+        
+        // Then the user is told it isn't a Family Chat server and nothing but discovery went there.
+        #expect(context.alertInfo?.id == .homeserverNotAllowed)
+        #expect(context.alertInfo?.message == UntranslatedL10n.screenChangeServerErrorNotFamilyChatServer)
+        #expect(evilClient.homeserverLoginDetailsCallsCount == 0)
+        #expect(evilClient.loginUsernamePasswordInitialDeviceNameDeviceIdCallsCount == 0)
+    }
+    
     @Test
     func provisionedSignInCodeForAnotherAccountIsDiscarded() async throws {
         // Given a sign-in code that the homeserver redeems for another account than the link named (login CSRF).
@@ -395,9 +523,23 @@ final class AuthenticationStartScreenViewModelTests {
                                      supportsOAuthCreatePrompt: false,
                                      supportsPasswordLogin: supportsPasswordLogin))
         // Map both the server name and the homeserver URL so fallback lookups work.
+        // Family Chat: a family on its own domain (`smith.ie` → smith.safechat.family), and a domain resolving elsewhere.
+        familyClient = ClientSDKMock(.init(serverName: "smith.ie",
+                                           homeserverURL: "https://smith.safechat.family",
+                                           oAuthLoginURL: nil,
+                                           supportsOAuthCreatePrompt: false,
+                                           supportsPasswordLogin: true))
+        evilClient = ClientSDKMock(.init(serverName: "evil.com",
+                                         homeserverURL: "https://evil.com",
+                                         oAuthLoginURL: nil,
+                                         supportsOAuthCreatePrompt: false,
+                                         supportsPasswordLogin: true))
         let homeserverClients: [String: ClientSDKMock] = ["company.com": client,
                                                           "https://matrix.company.com": client,
-                                                          "https://company.com": client] // as a sign-in link names it
+                                                          "https://company.com": client, // as a sign-in link names it
+                                                          "smith.ie": familyClient,
+                                                          "https://smith.safechat.family": familyClient,
+                                                          "evil.com": evilClient]
         let configuration = ClientFactoryMock.Configuration(homeserverClients: homeserverClients)
         
         if let classicAppAccount {
@@ -502,5 +644,10 @@ extension AuthenticationStartScreenViewModelAction {
 private extension AccountProvisioningParameters {
     static var anaSignInCode: AccountProvisioningParameters {
         .init(accountProvider: "company.com", loginHint: "mxid:@ana:company.com", hs: "company.com", token: "syl_code")
+    }
+    
+    /// A family on its own domain: Matrix server name `smith.ie`, homeserver `smith.safechat.family`.
+    static var kidCustomDomainSignInCode: AccountProvisioningParameters {
+        .init(accountProvider: "smith.ie", loginHint: "mxid:@kid:smith.ie", hs: "smith.safechat.family", token: "syl_code")
     }
 }

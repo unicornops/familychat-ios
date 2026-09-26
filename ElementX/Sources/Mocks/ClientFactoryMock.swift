@@ -39,7 +39,29 @@ extension ClientFactoryMock {
                                               oAuthLoginURL: "https://auth.secure.gov/login",
                                               supportsOAuthCreatePrompt: false,
                                               supportsPasswordLogin: false,
-                                              elementWellKnown: "{\"version\":1,\"enforce_element_pro\":true}"))
+                                              elementWellKnown: "{\"version\":1,\"enforce_element_pro\":true}")),
+            // Family Chat: a family homeserver, and a family on its own domain whose `.well-known` delegates to it.
+            "smith.safechat.family": ClientSDKMock(.init(serverName: "smith.safechat.family",
+                                                         homeserverURL: "https://smith.safechat.family",
+                                                         slidingSyncVersion: .native,
+                                                         oAuthLoginURL: nil,
+                                                         supportsOAuthCreatePrompt: false,
+                                                         supportsPasswordLogin: true)),
+            "smith.ie": ClientSDKMock(.init(serverName: "smith.ie",
+                                            homeserverURL: "https://smith.safechat.family/",
+                                            slidingSyncVersion: .native,
+                                            oAuthLoginURL: nil,
+                                            supportsOAuthCreatePrompt: false,
+                                            supportsPasswordLogin: true,
+                                            validCredentials: (username: "@kid:smith.ie", password: "12345678"))),
+            // A domain whose `.well-known` points at a homeserver outside `*.safechat.family`.
+            "evil.com": ClientSDKMock(.init(serverName: "evil.com",
+                                            homeserverURL: "https://evil.com",
+                                            slidingSyncVersion: .native,
+                                            oAuthLoginURL: nil,
+                                            supportsOAuthCreatePrompt: false,
+                                            supportsPasswordLogin: true,
+                                            validCredentials: (username: "@kid:evil.com", password: "12345678")))
         ]
     }
     

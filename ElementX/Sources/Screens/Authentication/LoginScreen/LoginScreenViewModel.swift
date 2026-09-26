@@ -70,13 +70,16 @@ class LoginScreenViewModel: LoginScreenViewModelType, LoginScreenViewModelProtoc
         
         guard let serverName = try? serverNameFromUserId(userId: username) else { return }
         
-        // Family Chat: a Matrix ID only moves the sign-in to its server when that server is an allowed account
-        // provider, and then only the canonical host that was checked is handed to the SDK.
-        guard let homeserverDomain = appSettings.allowedAccountProvider(serverName) else {
+        // Family Chat: a Matrix ID moves the sign-in to its server only when that server name is canonical, and then
+        // only the canonical host is handed to the SDK. The name may be a family's own domain (`@kid:smith.ie`):
+        // `configure` refuses it unless it resolves to an allowed homeserver, before any password is sent.
+        guard let homeserverDomain = appSettings.accountProviderServerName(serverName) else {
             MXLog.info("The Matrix ID's server is not an allowed account provider.")
             state.bindings.alertInfo = AlertInfo(id: .accountProviderNotAllowed,
                                                  title: L10n.commonServerNotSupported,
                                                  message: UntranslatedL10n.screenChangeServerErrorNotAllowed(appSettings.exampleAccountProvider))
+            // Clear out the refused Matrix ID so its password isn't sent to the server that is still configured.
+            state.bindings.username = ""
             return
         }
         
@@ -160,6 +163,12 @@ class LoginScreenViewModel: LoginScreenViewModelType, LoginScreenViewModelProtoc
                                                  title: L10n.commonServerNotSupported,
                                                  message: L10n.screenLoginErrorUnsupportedAuthentication)
             // Clear out the invalid username to avoid an attempted login to matrix.org
+            state.bindings.username = ""
+        case .homeserverNotAllowed:
+            state.bindings.alertInfo = AlertInfo(id: .accountProviderNotAllowed,
+                                                 title: L10n.commonServerNotSupported,
+                                                 message: UntranslatedL10n.screenChangeServerErrorNotFamilyChatServer)
+            // Clear out the refused Matrix ID so its password isn't sent to the server that is still configured.
             state.bindings.username = ""
         case .sessionTokenRefreshNotSupported:
             state.bindings.alertInfo = AlertInfo(id: .refreshTokenAlert,
