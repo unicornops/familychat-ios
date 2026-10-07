@@ -4,12 +4,13 @@
 # Please see LICENSE files in the repository root for full details.
 
 # Family Chat iOS release pipeline (#6, docs/RELEASING.md). A tag v<upstream version>-fc.<n> on familychat:
-# - builds and signs the app with its notification service and share extensions (Xcode automatic signing through an
-#   App Store Connect API key: certificates and profiles are created and managed by Apple),
+# - builds and signs the app with its notification service and share extensions (the Apple Distribution certificate
+#   from the release environment; Xcode automatic signing through an App Store Connect API key registers the App IDs
+#   and capabilities and creates the App Store profiles),
 # - uploads it to App Store Connect, where it becomes a TestFlight build,
 # - publishes a GitHub pre-release with the dSYMs, a CycloneDX SBOM, SHA256SUMS and build provenance attestations.
-# The App Store Connect key is in the protected `release` environment (Rob is the required reviewer), used by the build
-# job only: one approval per release. The Team ID comes from the organisation secret APPLE_TEAM_ID.
+# The certificate and the App Store Connect key are in the protected `release` environment (Rob is the required
+# reviewer), used by the build job only: one approval per release. The Team ID comes from the organisation secret APPLE_TEAM_ID.
 
 name: Release
 
@@ -82,6 +83,33 @@ jobs:
           fi
       - name: Generate the Xcode project
         run: xcodegen
+      # The distribution certificate is imported into a throwaway keychain: Xcode's cloud signing only covers the
+      # export, and creating a certificate on every runner would soon hit Apple's per-team limit. The API key file is
+      # written here, outside the build step, so that the build tools never see the key in their environment.
+      - name: Prepare signing
+        env:
+          DIST_CERT_P12_BASE64: ${{ secrets.DIST_CERT_P12_BASE64 }}
+          DIST_CERT_P12_PASSWORD: ${{ secrets.DIST_CERT_P12_PASSWORD }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+        run: |
+          for name in DIST_CERT_P12_BASE64 DIST_CERT_P12_PASSWORD ASC_KEY_ID ASC_KEY_P8; do
+            if [ -z "${!name}" ]; then
+              echo "::error::${name} is not set in the release environment (docs/RELEASING.md)"
+              exit 1
+            fi
+          done
+          keychain="$RUNNER_TEMP/signing.keychain-db"
+          keychain_password="$(uuidgen)"
+          security create-keychain -p "$keychain_password" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$keychain_password" "$keychain"
+          printf '%s' "$DIST_CERT_P12_BASE64" | base64 --decode > "$RUNNER_TEMP/dist.p12"
+          security import "$RUNNER_TEMP/dist.p12" -k "$keychain" -P "$DIST_CERT_P12_PASSWORD" -T /usr/bin/codesign -T /usr/bin/security
+          rm -f "$RUNNER_TEMP/dist.p12"
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$keychain_password" "$keychain" > /dev/null
+          security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
+          printf '%s\n' "$ASC_KEY_P8" > "$RUNNER_TEMP/AuthKey_${ASC_KEY_ID}.p8"
       - name: Archive and upload
         env:
           VERSION: ${{ needs.gate.outputs.version }}
@@ -90,24 +118,21 @@ jobs:
           TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
           ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
-          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
         run: |
-          for name in TEAM_ID ASC_KEY_ID ASC_ISSUER_ID ASC_KEY_P8; do
+          for name in TEAM_ID ASC_KEY_ID ASC_ISSUER_ID; do
             if [ -z "${!name}" ]; then
               echo "::error::${name} is not set (docs/RELEASING.md)"
               exit 1
             fi
           done
-          key_path="$RUNNER_TEMP/AuthKey_${ASC_KEY_ID}.p8"
-          trap 'rm -f "$key_path"' EXIT
-          printf '%s\n' "$ASC_KEY_P8" > "$key_path"
           auth=(-allowProvisioningUpdates
-                -authenticationKeyPath "$key_path"
+                -authenticationKeyPath "$RUNNER_TEMP/AuthKey_${ASC_KEY_ID}.p8"
                 -authenticationKeyID "$ASC_KEY_ID"
                 -authenticationKeyIssuerID "$ASC_ISSUER_ID")
 
           set -o pipefail
-          # Signed for distribution straight away: a development-signed archive would need a registered device.
+          # Automatic signing still registers the App IDs and capabilities and creates the App Store profiles through
+          # the API key; the identity is the imported distribution certificate.
           xcodebuild archive \
             -project ElementX.xcodeproj \
             -scheme ElementX \
@@ -122,7 +147,8 @@ jobs:
             CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
             | xcbeautify -q --disable-logging --is-ci --renderer github-actions
 
-          # destination=upload: exporting sends the build straight to App Store Connect (TestFlight).
+          # destination=upload: exporting sends the build straight to App Store Connect (TestFlight). Not piped through
+          # xcbeautify, which would hide the reason of a failure; the full logs are uploaded on failure.
           /usr/libexec/PlistBuddy -c "Add :method string app-store-connect" \
             -c "Add :destination string upload" \
             -c "Add :signingStyle string automatic" \
@@ -134,9 +160,23 @@ jobs:
             -archivePath "$RUNNER_TEMP/FamilyChat.xcarchive" \
             -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" \
             -exportPath "$RUNNER_TEMP/export" \
-            "${auth[@]}" \
-            | xcbeautify -q --disable-logging --is-ci --renderer github-actions
+            "${auth[@]}"
           echo "::notice::Uploaded ${VERSION} (${BUILD_NUMBER}) to App Store Connect"
+      - name: Upload the export logs
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: export-logs-${{ needs.gate.outputs.tag }}
+          path: |
+            ${{ runner.temp }}/export
+            /var/folders/**/*.xcdistributionlogs
+          if-no-files-found: ignore
+          retention-days: 7
+      - name: Remove the signing material
+        if: always()
+        run: |
+          security delete-keychain "$RUNNER_TEMP/signing.keychain-db" 2> /dev/null || true
+          rm -f "$RUNNER_TEMP"/AuthKey_*.p8 "$RUNNER_TEMP/dist.p12"
       - name: Collect the dSYMs
         env:
           TAG: ${{ needs.gate.outputs.tag }}
@@ -169,11 +209,11 @@ jobs:
         with:
           name: release-${{ needs.gate.outputs.tag }}
           path: dist
-      # The Swift packages the app is built from (Package.resolved).
+      # The Swift packages the app is built from: the workspace's Package.resolved, not the tools' or the demo apps'.
       - name: Generate the SBOM
         uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
         with:
-          path: .
+          file: ElementX.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
           format: cyclonedx-json
           output-file: dist/familychat-ios-${{ needs.gate.outputs.tag }}-sbom.cdx.json
           upload-artifact: false

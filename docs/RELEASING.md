@@ -26,11 +26,17 @@ version comes with the next upstream merge.
 
 1. **Team ID:** the organisation secret `APPLE_TEAM_ID` already holds it.
 2. **App Store Connect API key:** App Store Connect → Users and Access → Integrations → Team Keys, role **Admin**
-   (cloud-managed distribution signing needs it). Keep the Issuer ID, the Key ID and the downloaded `.p8` (Apple offers
+   (registering App IDs and creating profiles needs it). Keep the Issuer ID, the Key ID and the downloaded `.p8` (Apple offers
    it once).
 3. **App record:** App Store Connect → Apps → + → iOS app, bundle ID `family.safechat.app` (register it under
    Certificates, Identifiers & Profiles first if App Store Connect does not list it), name "Family Chat".
-4. **`release` environment** in this repository with Rob as required reviewer, deployment limited to `v*-fc.*` tags and
+4. **Distribution certificate**, created once on a Mac (not on a shared machine):
+   Keychain Access → Certificate Assistant → Request a Certificate From a Certificate Authority (saved to disk), then
+   Certificates, Identifiers & Profiles → Certificates → + → **Apple Distribution** with that request. Install the
+   downloaded `.cer`, export the certificate with its private key from Keychain Access as a `.p12` with a strong
+   password, then `base64 -i dist.p12 | pbcopy` for the secret below and delete the `.p12`. The archive step signs on
+   the runner, so it needs this identity locally; Xcode's cloud signing only covers the export.
+5. **`release` environment** in this repository with Rob as required reviewer, deployment limited to `v*-fc.*` tags and
    `familychat` (gitops-environments#31), holding:
 
    | Secret | Value |
@@ -38,17 +44,20 @@ version comes with the next upstream merge.
    | `ASC_KEY_ID` | the API key's Key ID |
    | `ASC_ISSUER_ID` | the Issuer ID shown above the keys list |
    | `ASC_KEY_P8` | the whole `.p8` file |
+   | `DIST_CERT_P12_BASE64` | the base64 of the `.p12` |
+   | `DIST_CERT_P12_PASSWORD` | its password |
 
-5. **Notification filtering:** the notification service extension declares
+6. **Notification filtering:** the notification service extension declares
    `com.apple.developer.usernotifications.filtering`, which Apple grants on request
    (developer.apple.com/contact/request/notification-service). Until it is granted the workflow signs the extension
    without it, and notifications it would have discarded (your own messages, edits) show the generic "Notification"
    alert. Once Apple grants it, set the repository variable `IOS_NSE_FILTERING_ENTITLEMENT` to `granted`.
-6. **Push:** the APNs key (`APNS_KEY_ID`, `APNS_TEAM_ID`, `APNS_AUTH_KEY_P8`) goes into family-chat's environments,
+7. **Push:** the APNs key (`APNS_KEY_ID`, `APNS_TEAM_ID`, `APNS_AUTH_KEY_P8`) goes into family-chat's environments,
    where Sygnal uses it (family-chat `docs/deployment-manual.md`, "Push gateway"). The app registers its pusher as
    `family.safechat.app.ios.prod` (TestFlight, App Store) or `.ios.dev` (debug builds).
 
-Xcode creates the distribution certificate, the bundle IDs of the extensions (`.nse`, `.share`), their capabilities
+The workflow imports the certificate into a temporary keychain, deleted at the end of the job. Xcode registers the
+bundle IDs of the extensions (`.nse`, `.share`), their capabilities
 (push, app group `group.family.safechat`, associated domains) and the App Store profiles through the API key
 (`-allowProvisioningUpdates`); nothing is committed.
 
@@ -62,7 +71,8 @@ Xcode creates the distribution certificate, the bundle IDs of the extensions (`.
    once; external testing needs a TestFlight review.
 6. Submitting to the App Store is manual in App Store Connect: Kids Category, age band 9–11, rating 9+ (decision 8).
 
-To build a tag again (a new secret, a failed upload), run the Release workflow by hand with that tag.
+To build a tag again (a new secret, a failed upload), run the Release workflow by hand with that tag. A failed export
+uploads Apple's distribution logs as the `export-logs-<tag>` artifact.
 
 ## Rolling back
 
@@ -72,5 +82,5 @@ the GitHub release withdrawn in its notes.
 ## Rotating credentials
 
 - **App Store Connect key:** revoke it in App Store Connect, create a new one, replace the three `ASC_*` secrets.
-- **Distribution certificate:** cloud-managed; revoking it in Certificates, Identifiers & Profiles makes the next
-  release create a new one.
+- **Distribution certificate:** it expires after a year. Create a new one (step 4), replace both `DIST_CERT_*`
+  secrets, then revoke the old one; builds already on TestFlight or the App Store are not affected.
