@@ -1,0 +1,58 @@
+name: Upstream sync
+
+# Merges each new stable element-hq/element-x-ios release into familychat on an upstream/<version> branch and opens a
+# pull request, or an `upstream-sync` issue when the merge conflicts. It never merges into familychat: a person
+# reviews every upstream merge. See "Merging upstream releases" in the README.
+
+on:
+  schedule:
+    - cron: '41 5 * * *'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Upstream tag to merge (release/YY.MM.N). Default: the latest stable release.'
+        required: false
+        type: string
+      dry_run:
+        description: 'Only report what would be pushed and opened'
+        required: false
+        type: boolean
+        default: true
+
+permissions: {}
+
+concurrency:
+  group: upstream-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    name: Merge the latest upstream release
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # Holds UPSTREAM_SYNC_TOKEN, and only deploys from familychat.
+    environment: upstream-sync
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: familychat
+          fetch-depth: 0
+          persist-credentials: false
+          # Screenshots are LFS pointers. The merge only needs the pointers, and the fork shares upstream's LFS objects.
+          lfs: false
+
+      - name: Merge and open a pull request or an issue
+        env:
+          # A fine-grained token (or GitHub App token) limited to this repository: contents, pull requests and issues
+          # write. Pushes made with GITHUB_TOKEN would not trigger CI on the pull request.
+          GH_TOKEN: ${{ secrets.UPSTREAM_SYNC_TOKEN }}
+          TAG: ${{ inputs.tag }}
+          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || 'false' }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::error::UPSTREAM_SYNC_TOKEN is not set in the upstream-sync environment"
+            exit 1
+          fi
+          ./.github/workflows/scripts/upstream-sync.sh
