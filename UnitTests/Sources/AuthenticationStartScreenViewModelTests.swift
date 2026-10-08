@@ -56,7 +56,7 @@ final class AuthenticationStartScreenViewModelTests {
             try await deferred.fulfill()
             
             // Then the authentication service should not be used yet.
-            #expect(clientFactory.makeAuthenticationClientHomeserverAddressSessionDirectoriesPassphraseClientSessionDelegateAppSettingsAppHooksCallsCount == 0)
+            #expect(clientFactory.makeAuthenticationClientServerNameOrBaseURLSessionDirectoriesPassphraseClientSessionDelegateAppSettingsAppHooksCallsCount == 0)
             #expect(client.urlForOauthOauthConfigurationPromptLoginHintDeviceIdAdditionalScopesCallsCount == 0)
             #expect(authenticationService.homeserver.value.loginMode == .unknown)
         }
@@ -75,7 +75,7 @@ final class AuthenticationStartScreenViewModelTests {
         context.send(viewAction: .login)
         try await deferred.fulfill()
         
-        #expect(clientFactory.makeAuthenticationClientHomeserverAddressSessionDirectoriesPassphraseClientSessionDelegateAppSettingsAppHooksCallsCount == 1)
+        #expect(clientFactory.makeAuthenticationClientServerNameOrBaseURLSessionDirectoriesPassphraseClientSessionDelegateAppSettingsAppHooksCallsCount == 1)
         #expect(client.urlForOauthOauthConfigurationPromptLoginHintDeviceIdAdditionalScopesCallsCount == 1)
         #expect(client.urlForOauthOauthConfigurationPromptLoginHintDeviceIdAdditionalScopesReceivedArguments?.prompt == .consent)
         #expect(client.urlForOauthOauthConfigurationPromptLoginHintDeviceIdAdditionalScopesReceivedArguments?.loginHint == "user@company.com")
@@ -96,7 +96,7 @@ final class AuthenticationStartScreenViewModelTests {
         try await deferred.fulfill()
         
         // Then a call to configure service should be made.
-        #expect(clientFactory.makeAuthenticationClientHomeserverAddressSessionDirectoriesPassphraseClientSessionDelegateAppSettingsAppHooksCallsCount == 1)
+        #expect(clientFactory.makeAuthenticationClientServerNameOrBaseURLSessionDirectoriesPassphraseClientSessionDelegateAppSettingsAppHooksCallsCount == 1)
         #expect(authenticationService.homeserver.value.loginMode == .password)
     }
     
@@ -114,7 +114,7 @@ final class AuthenticationStartScreenViewModelTests {
         context.send(viewAction: .login)
         try await deferred.fulfill()
         
-        #expect(clientFactory.makeAuthenticationClientHomeserverAddressSessionDirectoriesPassphraseClientSessionDelegateAppSettingsAppHooksCallsCount == 1)
+        #expect(clientFactory.makeAuthenticationClientServerNameOrBaseURLSessionDirectoriesPassphraseClientSessionDelegateAppSettingsAppHooksCallsCount == 1)
         #expect(client.urlForOauthOauthConfigurationPromptLoginHintDeviceIdAdditionalScopesCallsCount == 1)
         #expect(client.urlForOauthOauthConfigurationPromptLoginHintDeviceIdAdditionalScopesReceivedArguments?.prompt == .consent)
         #expect(client.urlForOauthOauthConfigurationPromptLoginHintDeviceIdAdditionalScopesReceivedArguments?.loginHint == nil)
@@ -136,7 +136,7 @@ final class AuthenticationStartScreenViewModelTests {
         try await deferred.fulfill()
         
         // Then a call to configure service should be made.
-        #expect(clientFactory.makeAuthenticationClientHomeserverAddressSessionDirectoriesPassphraseClientSessionDelegateAppSettingsAppHooksCallsCount == 1)
+        #expect(clientFactory.makeAuthenticationClientServerNameOrBaseURLSessionDirectoriesPassphraseClientSessionDelegateAppSettingsAppHooksCallsCount == 1)
         #expect(authenticationService.homeserver.value.loginMode == .password)
     }
     
@@ -159,8 +159,8 @@ final class AuthenticationStartScreenViewModelTests {
         context.send(viewAction: .continueWithClassic(classicAppAccount))
         try await deferred.fulfill()
         
-        #expect(clientFactory.makeAuthenticationClientHomeserverAddressSessionDirectoriesPassphraseClientSessionDelegateAppSettingsAppHooksCallsCount == 1)
-        #expect(clientFactory.makeAuthenticationClientHomeserverAddressSessionDirectoriesPassphraseClientSessionDelegateAppSettingsAppHooksReceivedArguments?.homeserverAddress == "company.com")
+        #expect(clientFactory.makeAuthenticationClientServerNameOrBaseURLSessionDirectoriesPassphraseClientSessionDelegateAppSettingsAppHooksCallsCount == 1)
+        #expect(clientFactory.makeAuthenticationClientServerNameOrBaseURLSessionDirectoriesPassphraseClientSessionDelegateAppSettingsAppHooksReceivedArguments?.serverNameOrBaseURL == "company.com")
         #expect(authenticationService.homeserver.value.loginMode == .oAuth(supportsCreatePrompt: false))
         #expect(client.urlForOauthOauthConfigurationPromptLoginHintDeviceIdAdditionalScopesReceivedArguments?.loginHint == "mxid:\(classicAppAccount.userID)")
     }
@@ -183,8 +183,8 @@ final class AuthenticationStartScreenViewModelTests {
         context.send(viewAction: .continueWithClassic(classicAppAccount))
         try await deferred.fulfill()
         
-        #expect(clientFactory.makeAuthenticationClientHomeserverAddressSessionDirectoriesPassphraseClientSessionDelegateAppSettingsAppHooksCallsCount == 2)
-        #expect(clientFactory.makeAuthenticationClientHomeserverAddressSessionDirectoriesPassphraseClientSessionDelegateAppSettingsAppHooksReceivedArguments?.homeserverAddress == "https://matrix.company.com")
+        #expect(clientFactory.makeAuthenticationClientServerNameOrBaseURLSessionDirectoriesPassphraseClientSessionDelegateAppSettingsAppHooksCallsCount == 2)
+        #expect(clientFactory.makeAuthenticationClientServerNameOrBaseURLSessionDirectoriesPassphraseClientSessionDelegateAppSettingsAppHooksReceivedArguments?.serverNameOrBaseURL == "https://matrix.company.com")
         #expect(authenticationService.homeserver.value.loginMode == .oAuth(supportsCreatePrompt: false))
         #expect(client.urlForOauthOauthConfigurationPromptLoginHintDeviceIdAdditionalScopesReceivedArguments?.loginHint == "mxid:\(classicAppAccount.userID)")
     }
@@ -225,7 +225,7 @@ final class AuthenticationStartScreenViewModelTests {
         
         // Then the code is never sent anywhere.
         #expect(exchanger.exchangeCallsCount == 0)
-        #expect(context.viewState.serverName == "company.com")
+        #expect(context.viewState.serverNameOrBaseURL == "company.com")
     }
     
     @Test
@@ -246,7 +246,7 @@ final class AuthenticationStartScreenViewModelTests {
         #expect(exchanger.exchangeReceivedArguments?.token == "syl_code")
         #expect(exchanger.exchangeReceivedArguments?.homeserverURL == "https://company.com")
         #expect(exchanger.logoutCallsCount == 0)
-        #expect(context.viewState.serverName == "company.com")
+        #expect(context.viewState.serverNameOrBaseURL == "company.com")
     }
     
     @Test
@@ -270,7 +270,7 @@ final class AuthenticationStartScreenViewModelTests {
         let continueAction = try #require(context.alertInfo?.primaryButton.action)
         continueAction()
         try await deferredAction.fulfill()
-        #expect(clientFactory.makeAuthenticationClientHomeserverAddressSessionDirectoriesPassphraseClientSessionDelegateAppSettingsAppHooksReceivedArguments?.homeserverAddress == "company.com")
+        #expect(clientFactory.makeAuthenticationClientServerNameOrBaseURLSessionDirectoriesPassphraseClientSessionDelegateAppSettingsAppHooksReceivedArguments?.serverNameOrBaseURL == "company.com")
     }
     
     // MARK: - Custom domains (family-chat#254)
@@ -283,7 +283,7 @@ final class AuthenticationStartScreenViewModelTests {
         await setupViewModel(provisioningParameters: .kidCustomDomainSignInCode,
                              supportsOAuth: false,
                              loginTokenExchanger: exchanger)
-        #expect(context.viewState.serverName == "smith.ie")
+        #expect(context.viewState.serverNameOrBaseURL == "smith.ie")
         #expect(context.alertInfo?.title.contains("@kid:smith.ie") == true)
         
         // When the user confirms the account.
@@ -333,7 +333,7 @@ final class AuthenticationStartScreenViewModelTests {
         
         // Then it goes to the family's domain through discovery (never straight to the link's `hs`), with the
         // username pre-filled from the hint.
-        #expect(clientFactory.makeAuthenticationClientHomeserverAddressSessionDirectoriesPassphraseClientSessionDelegateAppSettingsAppHooksReceivedArguments?.homeserverAddress == "smith.ie")
+        #expect(clientFactory.makeAuthenticationClientServerNameOrBaseURLSessionDirectoriesPassphraseClientSessionDelegateAppSettingsAppHooksReceivedArguments?.serverNameOrBaseURL == "smith.ie")
     }
     
     @Test
@@ -359,7 +359,7 @@ final class AuthenticationStartScreenViewModelTests {
         try await deferredAlert.fulfill()
         
         // Then the password form is never shown: discovery refused the domain and nothing fell back to `hs`.
-        let addresses = clientFactory.makeAuthenticationClientHomeserverAddressSessionDirectoriesPassphraseClientSessionDelegateAppSettingsAppHooksReceivedInvocations.map(\.homeserverAddress)
+        let addresses = clientFactory.makeAuthenticationClientServerNameOrBaseURLSessionDirectoriesPassphraseClientSessionDelegateAppSettingsAppHooksReceivedInvocations.map(\.serverNameOrBaseURL)
         #expect(addresses == ["https://smith.safechat.family", "evil.com"])
         #expect(familyClient.loginUsernamePasswordInitialDeviceNameDeviceIdCallsCount == 0)
     }
@@ -377,7 +377,7 @@ final class AuthenticationStartScreenViewModelTests {
         
         // Then the password sign-in for that domain follows.
         try await deferred.fulfill()
-        #expect(clientFactory.makeAuthenticationClientHomeserverAddressSessionDirectoriesPassphraseClientSessionDelegateAppSettingsAppHooksReceivedArguments?.homeserverAddress == "smith.ie")
+        #expect(clientFactory.makeAuthenticationClientServerNameOrBaseURLSessionDirectoriesPassphraseClientSessionDelegateAppSettingsAppHooksReceivedArguments?.serverNameOrBaseURL == "smith.ie")
     }
     
     @Test
@@ -594,7 +594,7 @@ final class AuthenticationStartScreenViewModelTests {
     }
     
     private func setAccountProviders(_ providers: [String], allowOtherAccountProviders: Bool = false) {
-        appSettings.override(accountProviders: providers,
+        appSettings.override(accountProviders: providers.map(AccountProvider.generic),
                              allowOtherAccountProviders: allowOtherAccountProviders,
                              hideBrandChrome: false,
                              pushGatewayBaseURL: appSettings.pushGatewayBaseURL,

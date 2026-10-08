@@ -153,10 +153,14 @@ class MockScreen: Identifiable {
             
             if id != .authenticationFlow {
                 // Family Chat locks the app to `*.safechat.family`; the test servers live under example.com.
-                let accountProviders = switch id {
-                case .singleProviderAuthenticationFlow: ["example.com"]
-                case .multipleProvidersAuthenticationFlow: ["guest.example.com", "example.com"]
-                default: ["*.example.com", "example.com"]
+                let accountProviders: [AccountProvider] = switch id {
+                case .singleProviderAuthenticationFlow:
+                    [.managed(serverName: "example.com", baseURL: "https://matrix.example.com")]
+                case .multipleProvidersAuthenticationFlow:
+                    [.managed(serverName: "guest.example.com", baseURL: "https://matrix.guest.example.com"),
+                     .managed(serverName: "example.com", baseURL: "https://matrix.example.com")]
+                default:
+                    [.generic("*.example.com"), .managed(serverName: "example.com", baseURL: "https://matrix.example.com")]
                 }
                 appSettings.override(accountProviders: accountProviders,
                                      allowOtherAccountProviders: false,

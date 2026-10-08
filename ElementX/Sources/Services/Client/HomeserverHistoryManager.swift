@@ -83,7 +83,7 @@ class HomeserverHistoryManager {
     private func updateCachedServers() {
         let previous = appSettings.previousServers.map { $0.lowercased() }
         // Family Chat: a wildcard rule is not a server, so only plain entries are offered (see `familyServer(completing:)`).
-        let defaultProviders = appSettings.pickableAccountProviders.map { $0.lowercased() }
+        let defaultProviders = appSettings.pickableAccountProviders.map { $0.serverNameOrBaseURL.lowercased() }
         
         cachedServers = previous + defaultProviders
     }

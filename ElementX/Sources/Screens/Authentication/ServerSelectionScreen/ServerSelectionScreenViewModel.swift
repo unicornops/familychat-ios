@@ -42,13 +42,12 @@ class ServerSelectionScreenViewModel: ServerSelectionScreenViewModelType, Server
         self.userIndicatorController = userIndicatorController
         self.homeserverHistoryManager = homeserverHistoryManager
         
-        let homeserverAddress: String
-        if case .picker(let providers) = mode {
-            homeserverAddress = providers[0]
+        let serverNameOrBaseURL = if case .picker(let providers) = mode {
+            providers[0]
         } else {
-            homeserverAddress = authenticationService.homeserver.value.address
+            authenticationService.homeserver.value.accountProvider.serverNameOrBaseURL
         }
-        let bindings = ServerSelectionScreenBindings(homeserverAddress: homeserverAddress)
+        let bindings = ServerSelectionScreenBindings(serverNameOrBaseURL: serverNameOrBaseURL)
         var viewState = ServerSelectionScreenViewState(mode: mode, authenticationFlow: authenticationFlow, bindings: bindings)
         if !appSettings.allowOtherAccountProviders, appSettings.hasWildcardAccountProvider {
             // Family Chat: show what a family server looks like (`yourfamily.safechat.family`) in the empty field.
@@ -86,38 +85,38 @@ class ServerSelectionScreenViewModel: ServerSelectionScreenViewModelType, Server
     // MARK: - Private
     
     private func pickServer() async {
-        let accountProvider = state.bindings.homeserverAddress
-        guard accountProvider.isEmpty == false else {
+        let serverNameOrBaseURL = state.bindings.serverNameOrBaseURL
+        guard serverNameOrBaseURL.isEmpty == false else {
             fatalError("It shouldn't be possible to confirm without a selection.")
         }
         
         startLoading()
         
-        switch await authenticationService.configure(for: accountProvider, flow: authenticationFlow) {
+        switch await authenticationService.configure(for: serverNameOrBaseURL, flow: authenticationFlow) {
         case .success:
-            MXLog.info("Selected server: \(accountProvider)")
+            MXLog.info("Selected server: \(serverNameOrBaseURL)")
             await fetchLoginURLIfNeededAndContinue()
             stopLoading()
         case .failure:
-            MXLog.info("Invalid server: \(accountProvider)")
+            MXLog.info("Invalid server: \(serverNameOrBaseURL)")
             stopLoading()
             // When the servers are hard-coded they should have a valid configuration, so show a generic error.
             state.bindings.alertInfo = AlertInfo(id: .unknownError)
         }
     }
     
-    /// Updates the login flow using the supplied homeserver address, or shows an error when this isn't possible.
+    /// Updates the login flow using the supplied server name or base URL, or shows an error when this isn't possible.
     private func configureHomeserver() async {
-        let userInput = state.bindings.homeserverAddress
+        let userInput = state.bindings.serverNameOrBaseURL
         // People often enter their Matrix ID here, so use the server name from it when they do.
-        let serverNameOrAddress = (try? serverNameFromUserId(userId: userInput)) ?? userInput
+        let userServerName = (try? serverNameFromUserId(userId: userInput)) ?? userInput
         
         // Family Chat: refuse anything that isn't plainly `hostname[:port]` before any network request. Only the
         // canonical host goes on to the SDK, never the raw input, which the SDK's URL parser could read differently.
         // The name itself may be anything (a family on its own domain types `smith.ie`): `configure` runs the
         // `.well-known` discovery and refuses a name that resolves outside the account providers, before any
         // password or OAuth request is made.
-        guard let homeserverAddress = appSettings.accountProviderServerName(serverNameOrAddress) else {
+        guard let serverNameOrBaseURL = appSettings.accountProviderServerName(userServerName) else {
             MXLog.info("Homeserver not allowed by the account providers.")
             showFooterMessage(UntranslatedL10n.screenChangeServerErrorNotAllowed(appSettings.exampleAccountProvider))
             return
@@ -125,13 +124,13 @@ class ServerSelectionScreenViewModel: ServerSelectionScreenViewModelType, Server
         
         startLoading()
         
-        switch await authenticationService.configure(for: homeserverAddress, flow: authenticationFlow) {
+        switch await authenticationService.configure(for: serverNameOrBaseURL, flow: authenticationFlow) {
         case .success:
-            MXLog.info("Selected homeserver: \(homeserverAddress)")
+            MXLog.info("Selected homeserver: \(serverNameOrBaseURL)")
             await fetchLoginURLIfNeededAndContinue()
             stopLoading()
         case .failure(let error):
-            MXLog.info("Invalid homeserver: \(homeserverAddress)")
+            MXLog.info("Invalid homeserver: \(serverNameOrBaseURL)")
             stopLoading()
             handleError(error)
         }
@@ -171,7 +170,7 @@ class ServerSelectionScreenViewModel: ServerSelectionScreenViewModelType, Server
     /// Processes an error to either update the flow or display it to the user.
     private func handleError(_ error: AuthenticationServiceError) {
         switch error {
-        case .invalidServer, .invalidHomeserverAddress:
+        case .invalidServer, .invalidServerNameOrBaseURL:
             showFooterMessage(L10n.screenChangeServerErrorInvalidHomeserver)
         case .homeserverNotAllowed:
             showFooterMessage(UntranslatedL10n.screenChangeServerErrorNotFamilyChatServer)
@@ -238,9 +237,9 @@ class ServerSelectionScreenViewModel: ServerSelectionScreenViewModelType, Server
         debouncedAutocompleteTask = Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(10))
             guard Task.isCancelled == false else { return }
-            context.homeserverAddress = newInput
+            context.serverNameOrBaseURL = newInput
             context.viewState.textField?.text = newInput
-            context.homeserverSelection = TextSelection(range: selectionRange)
+            context.serverNameOrBaseURLSelection = TextSelection(range: selectionRange)
         }
     }
 }
