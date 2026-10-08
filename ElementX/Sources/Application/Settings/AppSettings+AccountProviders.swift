@@ -8,16 +8,33 @@
 import Foundation
 
 /// Family Chat runs one homeserver per family under `<slug>.safechat.family`, so `accountProviders` accepts
-/// wildcard entries: `*.suffix` matches any subdomain of `suffix` (one or more labels), never the bare suffix.
-/// Matching ignores case. A plain entry matches exactly as upstream.
+/// wildcard entries: `.generic("*.suffix")` matches any subdomain of `suffix` (one or more labels), never the bare
+/// suffix. Matching ignores case. A plain entry matches exactly as upstream: a `.generic` entry by its value and a
+/// `.managed` one by its server name (see `pattern(of:)`).
 ///
 /// A wildcard rule is judged on the host of the resolved homeserver URL, never on the server name typed or linked:
 /// a family on its own domain (Matrix server name `smith.ie`) is served at `<slug>.safechat.family` via `.well-known`,
 /// so `smith.ie` is fine as long as it resolves there. See `isAllowedHomeserver(serverName:homeserverURL:)`.
 nonisolated extension AppSettings {
+    /// The string an `accountProviders` entry is matched with: a `.generic` entry's value (which may be a wildcard
+    /// rule) or a `.managed` entry's server name.
+    static func pattern(of accountProvider: AccountProvider) -> String {
+        switch accountProvider {
+        case .generic(let value):
+            value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        case .managed(let serverName, _, _):
+            serverName.lowercased()
+        }
+    }
+    
     /// Whether `pattern` is a wildcard entry.
     static func isWildcardAccountProvider(_ pattern: String) -> Bool {
         pattern.hasPrefix("*.")
+    }
+    
+    /// Whether `accountProvider` is a wildcard entry.
+    static func isWildcardAccountProvider(_ accountProvider: AccountProvider) -> Bool {
+        isWildcardAccountProvider(pattern(of: accountProvider))
     }
     
     /// Whether `serverName` matches one `accountProviders` entry.
@@ -58,18 +75,33 @@ nonisolated extension AppSettings {
     }
     
     /// The account providers a user can be offered directly: every entry that isn't a wildcard rule.
-    var pickableAccountProviders: [String] {
+    var pickableAccountProviders: [AccountProvider] {
         accountProviders.filter { !Self.isWildcardAccountProvider($0) }
     }
     
     /// Whether `accountProviders` contains a wildcard rule, in which case the user has to type their own server.
     var hasWildcardAccountProvider: Bool {
-        accountProviders.contains(where: Self.isWildcardAccountProvider)
+        accountProviders.contains { Self.isWildcardAccountProvider($0) }
     }
     
     /// The suffixes of the wildcard rules (`*.safechat.family` → `safechat.family`).
     var wildcardAccountProviderSuffixes: [String] {
-        accountProviders.filter(Self.isWildcardAccountProvider).map { String($0.dropFirst(2)).lowercased() }
+        wildcardPatterns.map { String($0.dropFirst(2)) }
+    }
+    
+    /// The matching patterns of every `accountProviders` entry (see `pattern(of:)`).
+    private var accountProviderPatterns: [String] {
+        accountProviders.map(Self.pattern(of:))
+    }
+    
+    /// The patterns of the plain (non-wildcard) entries.
+    private var pickablePatterns: [String] {
+        accountProviderPatterns.filter { !Self.isWildcardAccountProvider($0) }
+    }
+    
+    /// The patterns of the wildcard rules.
+    private var wildcardPatterns: [String] {
+        accountProviderPatterns.filter { Self.isWildcardAccountProvider($0) }
     }
     
     /// The server name to hand to `AuthenticationService.configure(for:flow:)` for `input`, or nil when the app may not
@@ -94,7 +126,7 @@ nonisolated extension AppSettings {
         if hasWildcardAccountProvider {
             return hostAndPort
         }
-        return pickableAccountProviders.contains { Self.accountProvider(Self.host(ofHostAndPort: hostAndPort), matches: $0) } ? hostAndPort : nil
+        return pickablePatterns.contains { Self.accountProvider(Self.host(ofHostAndPort: hostAndPort), matches: $0) } ? hostAndPort : nil
     }
     
     /// The homeserver host for `input` when it matches an `accountProviders` entry itself, or nil otherwise.
@@ -110,7 +142,7 @@ nonisolated extension AppSettings {
         guard let hostAndPort = Self.canonicalAccountProviderHost(input) else {
             return nil
         }
-        return accountProviders.contains { Self.accountProvider(Self.host(ofHostAndPort: hostAndPort), matches: $0) } ? hostAndPort : nil
+        return accountProviderPatterns.contains { Self.accountProvider(Self.host(ofHostAndPort: hostAndPort), matches: $0) } ? hostAndPort : nil
     }
     
     /// Whether `input` names a homeserver host that matches an `accountProviders` entry (see `allowedHomeserverHost(_:)`).
@@ -134,14 +166,13 @@ nonisolated extension AppSettings {
         guard let host = Self.httpsHost(ofHomeserverURL: homeserverURL) else {
             return false
         }
-        let wildcards = accountProviders.filter(Self.isWildcardAccountProvider)
-        if wildcards.contains(where: { Self.accountProvider(host, matches: $0) }) {
+        if wildcardPatterns.contains(where: { Self.accountProvider(host, matches: $0) }) {
             return true
         }
         guard let serverHostAndPort = Self.canonicalAccountProviderHost(serverName) else {
             return false
         }
-        return pickableAccountProviders.contains { Self.accountProvider(Self.host(ofHostAndPort: serverHostAndPort), matches: $0) }
+        return pickablePatterns.contains { Self.accountProvider(Self.host(ofHostAndPort: serverHostAndPort), matches: $0) }
     }
     
     /// The lower-cased host of an `https://` homeserver URL, or nil when the URL is anything else.
@@ -169,7 +200,7 @@ nonisolated extension AppSettings {
     
     /// An example a user can copy for the wildcard rule: `yourfamily.safechat.family`.
     var exampleAccountProvider: String {
-        guard let first = accountProviders.first else {
+        guard let first = accountProviderPatterns.first else {
             return ""
         }
         return Self.isWildcardAccountProvider(first) ? "yourfamily\(first.dropFirst())" : first

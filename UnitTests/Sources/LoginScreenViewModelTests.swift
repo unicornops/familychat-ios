@@ -229,7 +229,7 @@ struct LoginScreenViewModelTests {
     @Test
     mutating func matrixIDOnDisallowedServerIsRefused() async throws {
         // Given the app locked to *.safechat.family (the default).
-        await setupViewModel(homeserverAddress: "smith.safechat.family", allowOtherAccountProviders: false)
+        await setupViewModel(serverNameOrBaseURL: "smith.safechat.family", allowOtherAccountProviders: false)
         let matrixDotOrg = try #require(factoryConfiguration.homeserverClients["matrix.org"])
         
         // When entering a Matrix ID on a server that doesn't resolve to a family server.
@@ -243,7 +243,7 @@ struct LoginScreenViewModelTests {
         #expect(context.alertInfo?.id == .accountProviderNotAllowed)
         #expect(context.alertInfo?.message == UntranslatedL10n.screenChangeServerErrorNotFamilyChatServer)
         #expect(matrixDotOrg.homeserverLoginDetailsCallsCount == 0)
-        #expect(service.homeserver.value.address == "smith.safechat.family")
+        #expect(service.homeserver.value.accountProvider.serverNameOrBaseURL == "smith.safechat.family")
         // And the refused Matrix ID is cleared, so its password can't go to the family server instead.
         #expect(context.username == "")
         #expect(!context.viewState.isLoading)
@@ -252,11 +252,11 @@ struct LoginScreenViewModelTests {
     @Test
     mutating func matrixIDOnACustomDomainIsAccepted() async throws {
         // Given the app locked to *.safechat.family, and `smith.ie` delegating to smith.safechat.family.
-        await setupViewModel(homeserverAddress: "smith.safechat.family", allowOtherAccountProviders: false)
+        await setupViewModel(serverNameOrBaseURL: "smith.safechat.family", allowOtherAccountProviders: false)
         let smithDotIE = try #require(factoryConfiguration.homeserverClients["smith.ie"])
         
         // When entering a Matrix ID on the family's own domain.
-        let deferred = deferFulfillment(context.observe(\.viewState.homeserver)) { $0.address == "smith.ie" }
+        let deferred = deferFulfillment(context.observe(\.viewState.homeserver)) { $0.accountProvider.serverNameOrBaseURL == "smith.ie" }
         context.username = "@kid:smith.ie"
         context.send(viewAction: .parseUsername)
         try await deferred.fulfill()
@@ -274,7 +274,7 @@ struct LoginScreenViewModelTests {
     @Test
     mutating func matrixIDOnADomainResolvingElsewhereSendsNoPassword() async throws {
         // Given the app locked to *.safechat.family, and `evil.com` resolving to https://evil.com.
-        await setupViewModel(homeserverAddress: "smith.safechat.family", allowOtherAccountProviders: false)
+        await setupViewModel(serverNameOrBaseURL: "smith.safechat.family", allowOtherAccountProviders: false)
         let evil = try #require(factoryConfiguration.homeserverClients["evil.com"])
         
         // When entering a Matrix ID on it.
@@ -293,25 +293,25 @@ struct LoginScreenViewModelTests {
     @Test
     mutating func matrixIDParserDifferentialsAreRefusedBeforeDiscovery() async throws {
         // Given the app locked to *.safechat.family.
-        await setupViewModel(homeserverAddress: "smith.safechat.family", allowOtherAccountProviders: false)
+        await setupViewModel(serverNameOrBaseURL: "smith.safechat.family", allowOtherAccountProviders: false)
         
         for username in ["@kid:evil.com\\.safechat.family", "@kid:evil.com\\@a.safechat.family", "@kid:user@smith.safechat.family"] {
-            let callsBefore = clientFactory.makeAuthenticationClientHomeserverAddressSessionDirectoriesPassphraseClientSessionDelegateAppSettingsAppHooksCallsCount
+            let callsBefore = clientFactory.makeAuthenticationClientServerNameOrBaseURLSessionDirectoriesPassphraseClientSessionDelegateAppSettingsAppHooksCallsCount
             context.alertInfo = nil
             context.username = username
             context.send(viewAction: .parseUsername)
             try await Task.sleep(for: .milliseconds(50))
             
             // Then the SDK never sees the server name.
-            #expect(clientFactory.makeAuthenticationClientHomeserverAddressSessionDirectoriesPassphraseClientSessionDelegateAppSettingsAppHooksCallsCount == callsBefore,
+            #expect(clientFactory.makeAuthenticationClientServerNameOrBaseURLSessionDirectoriesPassphraseClientSessionDelegateAppSettingsAppHooksCallsCount == callsBefore,
                     Comment(rawValue: username))
-            #expect(service.homeserver.value.address == "smith.safechat.family", Comment(rawValue: username))
+            #expect(service.homeserver.value.accountProvider.serverNameOrBaseURL == "smith.safechat.family", Comment(rawValue: username))
         }
     }
     
     // MARK: - Helpers
     
-    private mutating func setupViewModel(homeserverAddress: String = "example.com",
+    private mutating func setupViewModel(serverNameOrBaseURL: String = "example.com",
                                          loginHint: String? = nil,
                                          allowOtherAccountProviders: Bool = true) async {
         let appSettings = AppSettings.volatile()
@@ -349,7 +349,7 @@ struct LoginScreenViewModelTests {
                                         appHooks: AppHooks())
         
         guard case .success = await service
-            .configure(for: homeserverAddress, flow: .login) else {
+            .configure(for: serverNameOrBaseURL, flow: .login) else {
             Issue.record("A valid server should be configured for the test.")
             return
         }
