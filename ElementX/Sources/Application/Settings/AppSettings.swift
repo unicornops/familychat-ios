@@ -384,11 +384,6 @@ final nonisolated class AppSettings: @unchecked Sendable {
     let elementCallBaseURL: URL = EmbeddedElementCall.appURL!
     #endif
     
-    // These are publicly availble on https://call.element.io so we don't neeed to treat them as secrets
-    let elementCallPosthogAPIHost = "https://posthog-element-call.element.io"
-    let elementCallPosthogAPIKey = "phc_rXGHx9vDmyEvyRxPziYtdVIv0ahEv8A9uLWFcCi1WcU"
-    let elementCallPosthogSentryDSN = "https://3bd2f95ba5554d4497da7153b552ffb5@sentry.tools.element.io/41"
-    
     @UserPreference
     var elementCallBaseURLOverride: URL?
     
@@ -400,8 +395,11 @@ final nonisolated class AppSettings: @unchecked Sendable {
     // MARK: - Maps
     
     /// The locally-bundled MapTiler configuration.
+    ///
+    /// Family Chat: location sharing is off (unicornops/family-chat#232 decision 4). A `nil` key hides the location
+    /// attachment, the map viewer and live location, and received locations show a placeholder without fetching tiles.
     static let bundledMapTilerConfiguration = MapTilerConfiguration(baseURL: "https://api.maptiler.com/maps",
-                                                                    apiKey: Secrets.mapLibreAPIKey,
+                                                                    apiKey: nil,
                                                                     lightStyleID: "9bc819c8-e627-474a-a348-ec144fe3d810",
                                                                     darkStyleID: "dea61faf-292b-4774-9660-58fcef89a7f3")
     

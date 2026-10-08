@@ -8,10 +8,22 @@
 
 import LinkPresentation
 
+nonisolated enum LinkMetadataProviderError: Error {
+    case disabled
+}
+
 class LinkMetadataProvider: LinkMetadataProviderProtocol {
+    /// Family Chat: off whatever the developer options say (#8). The device itself would fetch the linked page,
+    /// telling a third-party site that someone was sent that link and from which IP address.
+    static let isEnabled = false
+    
     private(set) var metadataItems = [URL: LinkMetadataProviderItem]()
     
     func fetchMetadataFor(url: URL) async -> Result<LinkMetadataProviderItem, Error> {
+        guard Self.isEnabled else {
+            return .failure(LinkMetadataProviderError.disabled)
+        }
+        
         if let item = metadataItems[url] {
             return .success(item)
         }
