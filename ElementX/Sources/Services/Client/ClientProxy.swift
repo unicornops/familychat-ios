@@ -8,6 +8,7 @@
 
 @preconcurrency import Combine
 import CryptoKit
+import ElementCall
 import Foundation
 import MatrixRustSDK
 import OrderedCollections
@@ -339,6 +340,10 @@ class ClientProxy: ClientProxyProtocol {
         client.canDeactivateAccount()
     }
     
+    var totalUnreadNotifications: UInt64 {
+        client.totalUnreadNotifications()
+    }
+    
     var userIDServerName: String? {
         do {
             return try client.userIdServerName()
@@ -368,6 +373,10 @@ class ClientProxy: ClientProxyProtocol {
                 return false
             }
         }
+    }
+    
+    func makeNativeCallTransport() -> ElementCallMatrixTransportProtocol? {
+        (client as? Client).flatMap { ElementCallSDKTransport(client: $0) }
     }
     
     var isLoginWithQRCodeSupported: Bool {

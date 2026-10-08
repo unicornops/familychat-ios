@@ -476,7 +476,7 @@ class AuthenticationFlowCoordinator: FlowCoordinatorProtocol {
         delegate?.authenticationFlowCoordinator(didLoginWithSession: userSession)
         
         // Family Chat: remember the bare host, never an `https://…` URL, so it can be offered and checked again.
-        let newServer = authenticationService.homeserver.value.address
+        let newServer = authenticationService.homeserver.value.accountProvider.serverNameOrBaseURL
         homeserverHistoryManager.addServerToList(AppSettings.canonicalAccountProviderHost(newServer) ?? newServer)
     }
 }

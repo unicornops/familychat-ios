@@ -376,6 +376,7 @@
 "common_success" = "Operazione riuscita";
 "common_suggested" = "Suggeriti";
 "common_suggestions" = "Suggerimenti";
+"common_switch_accounts" = "Switch accounts";
 "common_syncing" = "Sincronizzazione";
 "common_text" = "Testo";
 "common_third_party_notices" = "Comunicazioni di terze parti";
@@ -1293,6 +1294,7 @@
 "screen_room_confirm_removal_message" = "Are you sure you wish to remove this message?";
 "screen_room_confirm_removal_reason_label" = "Reason (optional)";
 "screen_room_confirm_removal_reason_placeholder" = "Enter…";
+"screen_room_confirm_removal_reason_supporting_text" = "(Optional)";
 "screen_room_confirm_removal_title" = "Confirm removal";
 "screen_room_details_add_topic_title" = "Aggiungi argomento";
 "screen_room_details_badge_encrypted" = "Cifrata";

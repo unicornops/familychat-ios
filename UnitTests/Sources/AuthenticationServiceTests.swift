@@ -25,7 +25,7 @@ struct AuthenticationServiceTests {
     
     @Test
     mutating func passwordLogin() async throws {
-        try await setup(serverAddress: "example.com")
+        try await setup(serverNameOrBaseURL: "example.com")
         
         switch await service.configure(for: "example.com", flow: .login) {
         case .success:
@@ -69,22 +69,20 @@ struct AuthenticationServiceTests {
     }
     
     @Test
-    @MainActor
     mutating func configureRegisterNoSupport() async throws {
-        let homeserverAddress = "example.com"
-        try await setup(serverAddress: homeserverAddress)
+        let serverNameOrBaseURL = "example.com"
+        try await setup(serverNameOrBaseURL: serverNameOrBaseURL)
         
         try await #require(throws: AuthenticationServiceError.registrationNotSupported) {
-            try await service.configure(for: homeserverAddress, flow: .register).get()
+            try await service.configure(for: serverNameOrBaseURL, flow: .register).get()
         }
         
         #expect(service.flow == .login)
         // Family Chat: the default `*.safechat.family` rule offers no server, the user types their family's.
-        #expect(service.homeserver.value == .init(address: "", loginMode: .unknown))
+        #expect(service.homeserver.value == .init(accountProvider: .generic(""), loginMode: .unknown))
     }
     
     @Test
-    @MainActor
     mutating func classicAppAccountSecretsBundleIsUsed() async throws {
         // Given an authentication service with an Element Classic account for Alice.
         try await setup(classicAppAccounts: [.mockAlice])
@@ -101,7 +99,6 @@ struct AuthenticationServiceTests {
     }
     
     @Test
-    @MainActor
     mutating func classicAppAccountSecretsBundleIsIgnoredWhenUnavailable() async throws {
         // Given an authentication service with an Element Classic account for Alice
         // which isn't configured with any available secrets.
@@ -119,7 +116,6 @@ struct AuthenticationServiceTests {
     }
     
     @Test
-    @MainActor
     mutating func classicAppAccountSecretsBundleIsIgnoredForDifferentUser() async throws {
         // Given an authentication service with an Element Classic account for Dan.
         try await setup(classicAppAccounts: [.mockDan])
@@ -139,7 +135,7 @@ struct AuthenticationServiceTests {
     mutating func signInCodeLogin() async throws {
         // Given a family homeserver and a sign-in code it accepts.
         let exchanger = LoginTokenExchangerMock(.init(result: .success(.mockAna)))
-        try await setup(serverAddress: "https://smith.safechat.family", loginTokenExchanger: exchanger)
+        try await setup(serverNameOrBaseURL: "https://smith.safechat.family", loginTokenExchanger: exchanger)
         
         // When redeeming the code without any prior server configuration.
         let result = await service.loginWithToken("syl_code",
@@ -161,7 +157,7 @@ struct AuthenticationServiceTests {
             #expect(client.restoreSessionSessionReceivedSession?.homeserverUrl == "https://smith.safechat.family")
             #expect(client.loginUsernamePasswordInitialDeviceNameDeviceIdCallsCount == 0)
             #expect(userSessionStore.userSessionForSessionDirectoriesPassphraseCallsCount == 1)
-            #expect(service.homeserver.value.address == "smith.safechat.family")
+            #expect(service.homeserver.value.accountProvider.serverNameOrBaseURL == "smith.safechat.family")
             #expect(exchanger.logoutCallsCount == 0)
             #expect(!service.isRedeemingSignInCode)
         case .failure(let error):
@@ -173,7 +169,7 @@ struct AuthenticationServiceTests {
     mutating func signInCodeRejected() async throws {
         // Given a family homeserver that refuses the code (used or expired).
         let exchanger = LoginTokenExchangerMock(.init(result: .failure(.rejected(errcode: "M_FORBIDDEN"))))
-        try await setup(serverAddress: "https://smith.safechat.family", loginTokenExchanger: exchanger)
+        try await setup(serverNameOrBaseURL: "https://smith.safechat.family", loginTokenExchanger: exchanger)
         
         // When redeeming it.
         let result = await service.loginWithToken("syl_code",
@@ -192,7 +188,7 @@ struct AuthenticationServiceTests {
     mutating func signInCodeUnreachableHomeserver() async throws {
         // Given a family homeserver that cannot be reached.
         let exchanger = LoginTokenExchangerMock(.init(result: .failure(.network(URLError(.notConnectedToInternet)))))
-        try await setup(serverAddress: "https://smith.safechat.family", loginTokenExchanger: exchanger)
+        try await setup(serverNameOrBaseURL: "https://smith.safechat.family", loginTokenExchanger: exchanger)
         
         let result = await service.loginWithToken("syl_code",
                                                   homeserverURL: "https://smith.safechat.family",
@@ -208,7 +204,7 @@ struct AuthenticationServiceTests {
     mutating func signInCodeForAnotherAccountIsDiscarded() async throws {
         // Given a code that the homeserver redeems for another account than the link's login hint named.
         let exchanger = LoginTokenExchangerMock(.init(result: .success(.mock(userID: "@mallory:smith.safechat.family"))))
-        try await setup(serverAddress: "https://smith.safechat.family", loginTokenExchanger: exchanger)
+        try await setup(serverNameOrBaseURL: "https://smith.safechat.family", loginTokenExchanger: exchanger)
         
         let result = await service.loginWithToken("syl_code",
                                                   homeserverURL: "https://smith.safechat.family",
@@ -229,7 +225,7 @@ struct AuthenticationServiceTests {
     mutating func signInCodeWithoutHintMustStayOnTheAccountProvider() async throws {
         // Given a link without a login hint whose code signs in to an account on another server.
         let exchanger = LoginTokenExchangerMock(.init(result: .success(.mock(userID: "@ana:evil.example"))))
-        try await setup(serverAddress: "https://smith.safechat.family", loginTokenExchanger: exchanger)
+        try await setup(serverNameOrBaseURL: "https://smith.safechat.family", loginTokenExchanger: exchanger)
         
         let result = await service.loginWithToken("syl_code",
                                                   homeserverURL: "https://smith.safechat.family",
@@ -246,7 +242,7 @@ struct AuthenticationServiceTests {
     mutating func signInCodeWithRefreshTokenIsDiscarded() async throws {
         // Given a homeserver that unexpectedly hands out a refresh token.
         let exchanger = LoginTokenExchangerMock(.init(result: .success(.mock(userID: "@ana:smith.safechat.family", refreshToken: "syr_refresh"))))
-        try await setup(serverAddress: "https://smith.safechat.family", loginTokenExchanger: exchanger)
+        try await setup(serverNameOrBaseURL: "https://smith.safechat.family", loginTokenExchanger: exchanger)
         
         let result = await service.loginWithToken("syl_code",
                                                   homeserverURL: "https://smith.safechat.family",
@@ -264,7 +260,7 @@ struct AuthenticationServiceTests {
     mutating func signInCodesAreRedeemedOneAtATime() async throws {
         // Given a redemption in flight.
         let exchanger = LoginTokenExchangerMock(.init(result: .success(.mockAna)))
-        try await setup(serverAddress: "https://smith.safechat.family", loginTokenExchanger: exchanger)
+        try await setup(serverNameOrBaseURL: "https://smith.safechat.family", loginTokenExchanger: exchanger)
         let service = try #require(self.service)
         var secondResult: Result<UserSessionProtocol, AuthenticationServiceError>?
         exchanger.exchangeWillAnswer = {
@@ -297,7 +293,7 @@ struct AuthenticationServiceTests {
         // Given the app locked to *.safechat.family and a link for a family on its own domain: the code is for
         // `hs=smith.safechat.family`, the account is `@kid:smith.ie`.
         let exchanger = LoginTokenExchangerMock(.init(result: .success(.mock(userID: "@kid:smith.ie"))))
-        try await setup(serverAddress: "https://smith.safechat.family", loginTokenExchanger: exchanger, allowOtherAccountProviders: false)
+        try await setup(serverNameOrBaseURL: "https://smith.safechat.family", loginTokenExchanger: exchanger, allowOtherAccountProviders: false)
         
         // When redeeming it.
         let result = await service.loginWithToken("syl_code",
@@ -311,14 +307,14 @@ struct AuthenticationServiceTests {
         #expect(exchanger.exchangeReceivedArguments?.homeserverURL == "https://smith.safechat.family")
         #expect(client.restoreSessionSessionReceivedSession?.userId == "@kid:smith.ie")
         #expect(exchanger.logoutCallsCount == 0)
-        #expect(service.homeserver.value.address == "smith.ie")
+        #expect(service.homeserver.value.accountProvider.serverNameOrBaseURL == "smith.ie")
     }
     
     @Test
     mutating func customDomainSignInCodeWithoutHintAcceptsTheFamilyDomain() async throws {
         // Given a custom-domain link without a login hint.
         let exchanger = LoginTokenExchangerMock(.init(result: .success(.mock(userID: "@kid:smith.ie"))))
-        try await setup(serverAddress: "https://smith.safechat.family", loginTokenExchanger: exchanger, allowOtherAccountProviders: false)
+        try await setup(serverNameOrBaseURL: "https://smith.safechat.family", loginTokenExchanger: exchanger, allowOtherAccountProviders: false)
         
         let result = await service.loginWithToken("syl_code",
                                                   homeserverURL: "https://smith.safechat.family",
@@ -340,7 +336,7 @@ struct AuthenticationServiceTests {
                                                                   ("@kid:evil.com", nil)]
         for testCase in cases {
             let exchanger = LoginTokenExchangerMock(.init(result: .success(.mock(userID: testCase.userID))))
-            try await setup(serverAddress: "https://smith.safechat.family", loginTokenExchanger: exchanger, allowOtherAccountProviders: false)
+            try await setup(serverNameOrBaseURL: "https://smith.safechat.family", loginTokenExchanger: exchanger, allowOtherAccountProviders: false)
             
             let result = await service.loginWithToken("syl_code",
                                                       homeserverURL: "https://smith.safechat.family",
@@ -359,11 +355,11 @@ struct AuthenticationServiceTests {
     @Test
     mutating func customDomainResolvingToAFamilyServerIsAccepted() async throws {
         // Given the app locked to *.safechat.family and `smith.ie` whose `.well-known` points at smith.safechat.family.
-        try await setup(serverAddress: "smith.ie", allowOtherAccountProviders: false)
+        try await setup(serverNameOrBaseURL: "smith.ie", allowOtherAccountProviders: false)
         
         // When configuring it and signing in with the full Matrix ID.
         try await service.configure(for: "smith.ie", flow: .login).get()
-        #expect(service.homeserver.value == .init(address: "smith.ie", loginMode: .password))
+        #expect(service.homeserver.value == .init(accountProvider: .generic("smith.ie"), loginMode: .password))
         _ = try await service.login(username: "@kid:smith.ie", password: "12345678", initialDeviceName: nil, deviceID: nil).get()
         
         // Then the password went to that client.
@@ -374,7 +370,7 @@ struct AuthenticationServiceTests {
     @Test
     mutating func domainResolvingOutsideTheAllowlistIsRefusedBeforeLogin() async throws {
         // Given the app locked to *.safechat.family and `evil.com` resolving to https://evil.com.
-        try await setup(serverAddress: "evil.com", allowOtherAccountProviders: false)
+        try await setup(serverNameOrBaseURL: "evil.com", allowOtherAccountProviders: false)
         
         // When configuring it.
         let result = await service.configure(for: "evil.com", flow: .login)
@@ -396,10 +392,10 @@ struct AuthenticationServiceTests {
     @Test
     mutating func refusedDomainDoesNotReplaceTheConfiguredServer() async throws {
         // Given a family server that is configured already, whose stores exist on disk.
-        try await setup(serverAddress: "evil.com", allowOtherAccountProviders: false)
+        try await setup(serverNameOrBaseURL: "evil.com", allowOtherAccountProviders: false)
         let familyClient = try #require(homeserverClients["smith.safechat.family"])
         try await service.configure(for: "smith.safechat.family", flow: .login).get()
-        let familyDirectories = try #require(clientFactory.makeAuthenticationClientHomeserverAddressSessionDirectoriesPassphraseClientSessionDelegateAppSettingsAppHooksReceivedArguments?.sessionDirectories)
+        let familyDirectories = try #require(clientFactory.makeAuthenticationClientServerNameOrBaseURLSessionDirectoriesPassphraseClientSessionDelegateAppSettingsAppHooksReceivedArguments?.sessionDirectories)
         try FileManager.default.createDirectory(at: familyDirectories.dataDirectory, withIntermediateDirectories: true)
         try FileManager.default.createDirectory(at: familyDirectories.cacheDirectory, withIntermediateDirectories: true)
         defer { familyDirectories.delete() }
@@ -409,7 +405,7 @@ struct AuthenticationServiceTests {
         await #expect(throws: AuthenticationServiceError.loginNotSupported) { try await service.configure(for: "nologin.safechat.family", flow: .login).get() }
         
         // Then the family server stays configured, and its stores weren't deleted.
-        #expect(service.homeserver.value.address == "smith.safechat.family")
+        #expect(service.homeserver.value.accountProvider.serverNameOrBaseURL == "smith.safechat.family")
         #expect(FileManager.default.directoryExists(at: familyDirectories.dataDirectory))
         #expect(FileManager.default.directoryExists(at: familyDirectories.cacheDirectory))
         
@@ -423,7 +419,7 @@ struct AuthenticationServiceTests {
     @Test
     mutating func loginMovingTheClientOutsideTheAllowlistIsRefused() async throws {
         // Given a family server whose login response points the client elsewhere (`well_known.m.homeserver`).
-        try await setup(serverAddress: "smith.safechat.family", allowOtherAccountProviders: false)
+        try await setup(serverNameOrBaseURL: "smith.safechat.family", allowOtherAccountProviders: false)
         try await service.configure(for: "smith.safechat.family", flow: .login).get()
         let familyClient = try #require(client)
         familyClient.loginUsernamePasswordInitialDeviceNameDeviceIdClosure = { [weak familyClient] _, _, _, _ in
@@ -444,7 +440,7 @@ struct AuthenticationServiceTests {
     mutating func signInCodeSessionMovedOutsideTheAllowlistIsDiscarded() async throws {
         // Given a sign-in code whose restored session ends up pointing outside the allowlist.
         let exchanger = LoginTokenExchangerMock(.init(result: .success(.mockAna)))
-        try await setup(serverAddress: "https://smith.safechat.family", loginTokenExchanger: exchanger, allowOtherAccountProviders: false)
+        try await setup(serverNameOrBaseURL: "https://smith.safechat.family", loginTokenExchanger: exchanger, allowOtherAccountProviders: false)
         let familyClient = try #require(client)
         familyClient.restoreSessionSessionClosure = { [weak familyClient] _ in
             familyClient?.homeserverReturnValue = "https://evil.com"
@@ -466,7 +462,7 @@ struct AuthenticationServiceTests {
     @Test
     mutating func qrCodeForADisallowedServerIsRefused() async throws {
         // Given the app locked to *.safechat.family and a QR code from a device signed in to evil.com.
-        try await setup(serverAddress: "evil.com", allowOtherAccountProviders: false)
+        try await setup(serverNameOrBaseURL: "evil.com", allowOtherAccountProviders: false)
         
         // When scanning it.
         let publisher = service.loginWithQRCode(data: Self.reciprocateQRCode(serverName: "evil.com"))
@@ -484,7 +480,7 @@ struct AuthenticationServiceTests {
         
         // Then the login is refused once evil.com's homeserver is resolved, before any QR login starts.
         #expect(error == .qrCodeError(.providerNotAllowed(scannedProvider: "evil.com", allowedProviders: ["*.safechat.family"])))
-        #expect(clientFactory.makeAuthenticationClientHomeserverAddressSessionDirectoriesPassphraseClientSessionDelegateAppSettingsAppHooksReceivedArguments?.homeserverAddress == "evil.com")
+        #expect(clientFactory.makeAuthenticationClientServerNameOrBaseURLSessionDirectoriesPassphraseClientSessionDelegateAppSettingsAppHooksReceivedArguments?.serverNameOrBaseURL == "evil.com")
         #expect(client.newLoginWithQrCodeHandlerOauthConfigurationCallsCount == 0)
     }
     
@@ -514,7 +510,7 @@ struct AuthenticationServiceTests {
     
     // MARK: - Helpers
     
-    private mutating func setup(serverAddress: String = "matrix.org",
+    private mutating func setup(serverNameOrBaseURL: String = "matrix.org",
                                 classicAppAccounts: [ClassicAppAccount] = [],
                                 availableSecrets: ClassicAppAccount.AvailableSecrets = .complete,
                                 loginTokenExchanger: LoginTokenExchangerProtocol = LoginTokenExchangerMock(),
@@ -537,7 +533,7 @@ struct AuthenticationServiceTests {
         clientFactory = ClientFactoryMock(configuration)
         homeserverClients = configuration.homeserverClients
         
-        client = configuration.homeserverClients[serverAddress]
+        client = configuration.homeserverClients[serverNameOrBaseURL]
         encryption = EncryptionSDKMock()
         client.encryptionReturnValue = encryption
         

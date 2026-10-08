@@ -20,6 +20,7 @@ import SwiftUI
 nonisolated protocol CommonSettingsProtocol: AnyObject, Sendable {
     var lastNotificationBootTime: TimeInterval? { get set }
     var selectedNotificationTone: NotificationTone? { get set }
+    var lastKnownBadgeCount: Int { get set }
     
     var logLevel: LogLevel { get }
     var traceLogPacks: Set<TraceLogPack> { get }
@@ -31,6 +32,7 @@ nonisolated protocol CommonSettingsProtocol: AnyObject, Sendable {
     var enableOnlySignedDeviceIsolationMode: Bool { get }
     var threadsEnabled: Bool { get }
     var hideQuietNotificationAlerts: Bool { get }
+    var roomListNotificationCountEnabled: Bool { get }
 }
 
 nonisolated enum AppBuildType {
@@ -72,12 +74,13 @@ final nonisolated class AppSettings: @unchecked Sendable {
     func resetSessionSpecificSettings() {
         MXLog.warning("Resetting the user session specific AppSettings.")
         resetHasRunIdentityConfirmationOnboarding()
+        resetSearchBreadcrumbs()
     }
     
     // MARK: - Hooks
     
     // swiftlint:disable:next function_parameter_count
-    func override(accountProviders: [String],
+    func override(accountProviders: [AccountProvider],
                   allowOtherAccountProviders: Bool,
                   hideBrandChrome: Bool,
                   pushGatewayBaseURL: URL,
@@ -143,10 +146,10 @@ final nonisolated class AppSettings: @unchecked Sendable {
     /// Account provider is the friendly term for the server name. It should not contain an `https` prefix and should
     /// match the last part of the user ID. For example `example.com` and not `https://matrix.example.com`.
     ///
-    /// Family Chat: an entry starting with `*.` matches every subdomain of its suffix (one family homeserver each,
-    /// `<slug>.safechat.family`). A wildcard rule is matched against the homeserver URL a server name resolves to, so
-    /// a family's own domain delegating there is allowed too. See `AppSettings+AccountProviders.swift` for the rules.
-    private(set) var accountProviders = ["*.safechat.family"]
+    /// Family Chat: a `.generic` entry starting with `*.` matches every subdomain of its suffix (one family homeserver
+    /// each, `<slug>.safechat.family`). A wildcard rule is matched against the homeserver URL a server name resolves to,
+    /// so a family's own domain delegating there is allowed too. See `AppSettings+AccountProviders.swift` for the rules.
+    private(set) var accountProviders: [AccountProvider] = [.generic("*.safechat.family")]
     /// Whether or not the user is allowed to manually enter their own account provider or must select from one of `defaultAccountProviders`.
     private(set) var allowOtherAccountProviders = false
     /// Whether the components surrounding the app brand/logo should be hidden or not
@@ -193,13 +196,15 @@ final nonisolated class AppSettings: @unchecked Sendable {
     @UserPreference(key: "previousServers", defaultValue: [])
     var previousServers: [String]
     
-    var defaultServer: String {
-        if let previousServer = previousServers.first {
-            return previousServer
+    var defaultAccountProvider: AccountProvider {
+        // Family Chat: upstream ignores the previous server when other providers are disallowed. Here it is the
+        // family's server, so it is offered as long as the account providers still allow it. A wildcard entry is a
+        // rule, not a server, and its bare suffix is not an allowed server either: otherwise start empty and let the
+        // text field's placeholder show an example (`yourfamily.safechat.family`).
+        if let previousServer = previousServers.first, accountProviderServerName(previousServer) != nil {
+            return .generic(previousServer)
         }
-        // A wildcard entry is a rule, not a server, and its bare suffix is not an allowed server either: start empty
-        // and let the text field's placeholder show an example (`yourfamily.safechat.family`).
-        return pickableAccountProviders.first ?? ""
+        return pickableAccountProviders.first ?? .generic("")
     }
     
     // MARK: - Security
@@ -272,6 +277,10 @@ final nonisolated class AppSettings: @unchecked Sendable {
     /// The device's last boot time as recorded by the NSE.
     @UserPreference
     var lastNotificationBootTime: TimeInterval?
+    
+    /// The app icon badge value the app last computed from the SDK's unread notification counts.
+    @UserPreference(defaultValue: 0)
+    var lastKnownBadgeCount: Int
     
     /// The sound played when delivering noisy notifications. If nil, use the ElementX default
     @UserPreference
@@ -361,6 +370,12 @@ final nonisolated class AppSettings: @unchecked Sendable {
     
     @UserPreference(defaultValue: false)
     var roomListNotificationCountEnabled: Bool
+    
+    // MARK: - Search Screen
+    
+    /// The queries the user searched for and the rooms they opened from the results, most recent first.
+    @UserPreference(defaultValue: [SearchBreadcrumb]())
+    var searchBreadcrumbs: [SearchBreadcrumb]
     
     // MARK: - Room Screen
     
@@ -466,6 +481,10 @@ final nonisolated class AppSettings: @unchecked Sendable {
     
     @UserPreference(defaultValue: AppBuildType.current != .release)
     var developerOptionsEnabled: Bool
+    
+    /// Runs calls through the native matrix-rust-rtc stack instead of the Element Call web view.
+    @UserPreference(defaultValue: false)
+    var nativeCallEnabled: Bool
     
     init(store: UserDefaultsProtocol) {
         self.store = store

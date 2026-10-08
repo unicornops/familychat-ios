@@ -48,12 +48,12 @@ class AuthenticationStartScreenViewModel: AuthenticationStartScreenViewModelType
         } ?? false
         // A single wildcard rule (`*.safechat.family`) is not a server to sign in to: the user types their own.
         let pickableProviders = appSettings.pickableAccountProviders
-        let lockedServerName = pickableProviders.count == 1 && !appSettings.hasWildcardAccountProvider ? pickableProviders[0] : nil
+        let lockedServerName = pickableProviders.count == 1 && !appSettings.hasWildcardAccountProvider ? pickableProviders[0].serverNameOrBaseURL : nil
         
         let initialViewState = if let provisioningParameters, !appSettings.allowOtherAccountProviders {
             // Family Chat: a provisioning link for an allowed family server behaves as it does upstream, with
             // account creation hidden as for every locked-down configuration.
-            AuthenticationStartScreenViewState(serverName: provisioningParameters.accountProvider,
+            AuthenticationStartScreenViewState(serverNameOrBaseURL: provisioningParameters.accountProvider,
                                                showCreateAccountButton: false,
                                                showQRCodeLoginButton: false,
                                                classicAppMode: nil,
@@ -61,21 +61,21 @@ class AuthenticationStartScreenViewModel: AuthenticationStartScreenViewModelType
         } else if !appSettings.allowOtherAccountProviders {
             // We don't show the create account button when custom providers are disallowed.
             // The assumption here being that if you're running a custom app, your users will already be created.
-            AuthenticationStartScreenViewState(serverName: lockedServerName,
+            AuthenticationStartScreenViewState(serverNameOrBaseURL: lockedServerName,
                                                showCreateAccountButton: false,
                                                showQRCodeLoginButton: isQRCodeScanningSupported,
                                                classicAppMode: isClassicAppAccountAllowed ? authenticationService.classicAppAccount.map { .welcomeBack($0) } : nil,
                                                hideBrandChrome: appSettings.hideBrandChrome)
         } else if let provisioningParameters {
             // We only show the "Sign in to …" button when using a provisioning link.
-            AuthenticationStartScreenViewState(serverName: provisioningParameters.accountProvider,
+            AuthenticationStartScreenViewState(serverNameOrBaseURL: provisioningParameters.accountProvider,
                                                showCreateAccountButton: false,
                                                showQRCodeLoginButton: false,
                                                classicAppMode: nil,
                                                hideBrandChrome: appSettings.hideBrandChrome)
         } else {
             // The default configuration.
-            AuthenticationStartScreenViewState(serverName: nil,
+            AuthenticationStartScreenViewState(serverNameOrBaseURL: nil,
                                                showCreateAccountButton: appSettings.showCreateAccountButton,
                                                showQRCodeLoginButton: isQRCodeScanningSupported,
                                                classicAppMode: authenticationService.classicAppAccount.map { .welcomeBack($0) },
@@ -220,26 +220,26 @@ class AuthenticationStartScreenViewModel: AuthenticationStartScreenViewModelType
             if classicAppAccount.state.availableSecrets == .requiresBackup {
                 state.bindings.showClassicAppBackupInstructions = true
             } else {
-                await configureAccountProvider(classicAppAccount.serverName,
-                                               loginHint: "mxid:\(classicAppAccount.userID)",
-                                               fallbackHomeserverURL: classicAppAccount.homeserverURL)
+                await loginDirectly(using: classicAppAccount.serverName,
+                                    loginHint: "mxid:\(classicAppAccount.userID)",
+                                    fallbackHomeserverURL: classicAppAccount.homeserverURL)
             }
-        } else if let serverName = state.serverName {
+        } else if let serverNameOrBaseURL = state.serverNameOrBaseURL {
             // Family Chat: the password sign-in (also after a failed sign-in code) goes to `account_provider` through
             // discovery, never to the link's `hs`: `configure` only accepts it when it resolves to an allowed homeserver.
             // Sending the password to `hs` would let a crafted link (`account_provider=smith.ie`, someone else's `hs`,
             // a bogus code) collect the password of the pre-filled account. There is deliberately no fallback to `hs`.
-            await configureAccountProvider(serverName, loginHint: provisioningParameters?.loginHint)
+            await loginDirectly(using: serverNameOrBaseURL, loginHint: provisioningParameters?.loginHint)
         } else {
             actionsSubject.send(.login) // No need to configure anything here, continue the flow.
         }
     }
     
-    private func configureAccountProvider(_ accountProvider: String, loginHint: String? = nil, fallbackHomeserverURL: URL? = nil) async {
+    private func loginDirectly(using serverNameOrBaseURL: String, loginHint: String? = nil, fallbackHomeserverURL: URL? = nil) async {
         startLoading()
         defer { stopLoading() }
         
-        if case .failure(let error) = await authenticationService.configure(for: accountProvider, flow: .login) {
+        if case .failure(let error) = await authenticationService.configure(for: serverNameOrBaseURL, flow: .login) {
             // Family Chat: a server that resolves outside the account providers is refused, never retried elsewhere.
             if error == .homeserverNotAllowed {
                 displayHomeserverNotAllowed()

@@ -1,7 +1,6 @@
 //
 // Copyright 2025 Element Creations Ltd.
 // Copyright 2022-2025 New Vector Ltd.
-// Copyright 2026 Unicorn Operations Ltd.
 //
 // SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Element-Commercial.
 // Please see LICENSE files in the repository root for full details.
@@ -11,38 +10,10 @@ import Foundation
 
 /// Information about a homeserver that is ready for display in the authentication flow.
 struct LoginHomeserver: Equatable {
-    /// The homeserver string to be shown to the user.
-    let address: String
+    /// The account provider who operates the homeserver.
+    let accountProvider: AccountProvider
     /// The types login supported by the homeserver.
     var loginMode: LoginMode
-    
-    /// Creates a new homeserver value.
-    init(address: String, loginMode: LoginMode) {
-        // Family Chat: with a wildcard account provider there is no default server, and an empty address must stay
-        // empty rather than be sanitised into `https:`.
-        let isEmpty = address.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        let address = isEmpty ? "" : Self.sanitized(address).components(separatedBy: "://").last ?? address
-        
-        self.address = address
-        self.loginMode = loginMode
-    }
-    
-    /// Sanitizes a user entered homeserver address with the following rules
-    /// - Trim any whitespace.
-    /// - Lowercase the address.
-    /// - Ensure the address contains a scheme, otherwise make it `https`.
-    /// - Remove any trailing slashes.
-    static func sanitized(_ address: String) -> String {
-        var address = address.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        
-        if !address.contains("://") {
-            address = "https://\(address)"
-        }
-        
-        address = address.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-        
-        return address
-    }
 }
 
 // MARK: - Mocks
@@ -50,21 +21,21 @@ struct LoginHomeserver: Equatable {
 extension LoginHomeserver {
     /// A mock homeserver that is configured just like matrix.org.
     static var mockMatrixDotOrg: LoginHomeserver {
-        LoginHomeserver(address: "matrix.org", loginMode: .oAuth(supportsCreatePrompt: true))
+        LoginHomeserver(accountProvider: .generic("matrix.org"), loginMode: .oAuth(supportsCreatePrompt: true))
     }
     
     /// A mock homeserver that supports login and registration via a password but has no OAuth support.
     static var mockBasicServer: LoginHomeserver {
-        LoginHomeserver(address: "example.com", loginMode: .password)
+        LoginHomeserver(accountProvider: .generic("example.com"), loginMode: .password)
     }
     
     /// A mock homeserver that supports only supports authentication via OAuth.
     static var mockOAuth: LoginHomeserver {
-        LoginHomeserver(address: "company.com", loginMode: .oAuth(supportsCreatePrompt: false))
+        LoginHomeserver(accountProvider: .generic("company.com"), loginMode: .oAuth(supportsCreatePrompt: false))
     }
     
     /// A mock homeserver that only with no supported login flows.
     static var mockUnsupported: LoginHomeserver {
-        LoginHomeserver(address: "server.net", loginMode: .unsupported)
+        LoginHomeserver(accountProvider: .generic("server.net"), loginMode: .unsupported)
     }
 }

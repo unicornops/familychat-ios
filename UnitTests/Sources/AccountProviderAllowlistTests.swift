@@ -38,7 +38,7 @@ struct AccountProviderAllowlistTests {
         #expect(appSettings.exampleAccountProvider == "yourfamily.safechat.family")
         // A wildcard rule is never offered as the server to sign in to, and neither is its bare suffix.
         #expect(appSettings.wildcardAccountProviderSuffixes == ["safechat.family"])
-        #expect(appSettings.defaultServer == "")
+        #expect(appSettings.defaultAccountProvider == .generic(""))
         
         // Then family homeservers (a sign-in link's `hs`) are allowed, as a name, a host with port, or a URL.
         #expect(appSettings.isAllowedHomeserverHost("smith.safechat.family"))
@@ -228,7 +228,7 @@ struct AccountProviderAllowlistTests {
 
 private extension AppSettings {
     func overrideAccountProviders(_ accountProviders: [String]) {
-        override(accountProviders: accountProviders,
+        override(accountProviders: accountProviders.map(AccountProvider.generic),
                  allowOtherAccountProviders: false,
                  hideBrandChrome: false,
                  pushGatewayBaseURL: pushGatewayBaseURL,
