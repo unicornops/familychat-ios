@@ -163,8 +163,6 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
                 configuration.elementCallBaseURL
             }
             
-            // Family Chat: never give the call widget Element's PostHog and Sentry (#8).
-            let analyticsConfiguration: ElementCallAnalyticsConfiguration? = nil
             let rageshakeURL: String? = if case let .url(baseURL) = appSettings.bugReportRageshakeURL.publisher.value {
                 baseURL.absoluteString
             } else {
@@ -175,8 +173,7 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
                                             clientID: configuration.clientID,
                                             colorScheme: configuration.colorScheme,
                                             voiceOnly: configuration.voiceOnly,
-                                            rageshakeURL: rageshakeURL,
-                                            analyticsConfiguration: analyticsConfiguration) {
+                                            rageshakeURL: rageshakeURL) {
             case .success(let url):
                 state.url = url
             case .failure(let error):

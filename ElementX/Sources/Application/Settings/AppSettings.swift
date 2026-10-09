@@ -297,8 +297,6 @@ final nonisolated class AppSettings: @unchecked Sendable {
     // MARK: - Bug report
     
     let bugReportRageshakeURL: RemotePreference<RageshakeConfiguration> = .init(Secrets.rageshakeURL.map { .url(URL(string: $0)!) } ?? .disabled) // swiftlint:disable:this force_unwrapping
-    let bugReportSentryURL: URL? = Secrets.sentryDSN.map { URL(string: $0)! } // swiftlint:disable:this force_unwrapping
-    let bugReportSentryRustURL: URL? = Secrets.sentryRustDSN.map { URL(string: $0)! } // swiftlint:disable:this force_unwrapping
     /// The name allocated by the bug report server
     private(set) var bugReportApplicationID = "familychat-ios"
     
@@ -317,17 +315,13 @@ final nonisolated class AppSettings: @unchecked Sendable {
     // MARK: - Analytics
     
     /// The configuration to use for analytics. Set to `nil` to disable analytics.
-    let analyticsConfiguration: AnalyticsConfiguration? = AppSettings.makeAnalyticsConfiguration()
+    /// Family Chat: always `nil`. No analytics or crash reporting SDK is linked (#8).
+    let analyticsConfiguration: AnalyticsConfiguration? = nil
     /// The URL to open with more information about analytics terms. When this is `nil` the "Learn more" link will be hidden.
     private(set) var analyticsTermsURL: URL?
-    /// Whether or not there the app is able ask for user consent to enable analytics or sentry reporting.
+    /// Whether or not there the app is able ask for user consent to enable analytics.
     var canPromptForAnalytics: Bool {
-        analyticsConfiguration != nil || bugReportSentryURL != nil
-    }
-    
-    private static func makeAnalyticsConfiguration() -> AnalyticsConfiguration? {
-        guard let host = Secrets.postHogHost, let apiKey = Secrets.postHogAPIKey else { return nil }
-        return AnalyticsConfiguration(host: host, apiKey: apiKey)
+        analyticsConfiguration != nil
     }
     
     /// Whether the user has opted in to send analytics.

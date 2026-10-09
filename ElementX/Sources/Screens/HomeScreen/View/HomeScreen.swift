@@ -8,7 +8,6 @@
 
 import Combine
 import Compound
-import SentrySwiftUI
 import SwiftUI
 
 struct HomeScreen: View {
@@ -36,7 +35,6 @@ struct HomeScreen: View {
             .background(Color.compound.bgCanvasDefault.ignoresSafeArea())
             .track(screen: .Home)
             .toolbarBloom(hasSearchBar: context.viewState.isRoomListSearchEnabled)
-            .sentryTrace("\(Self.self)")
             .sheet(item: $context.spaceFiltersViewModel) { vm in
                 ChatsSpaceFiltersScreen(context: vm.context)
                     .navigationTransition(.zoom(sourceID: NavigationTransitionSourceID.spaceFilters,

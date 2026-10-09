@@ -8,7 +8,6 @@
 
 import AnalyticsEvents
 import Combine
-import PostHog
 
 class AnalyticsService: AnalyticsServiceProtocol {
     /// The analytics client to send events with.

@@ -61,6 +61,46 @@ bundle IDs of the extensions (`.nse`, `.share`), their capabilities
 (push, app group `group.family.safechat`, associated domains) and the App Store profiles through the API key
 (`-allowProvisioningUpdates`); nothing is committed.
 
+## App Privacy (the App Store "nutrition label")
+
+App Store Connect → the app → App Privacy asks what the app collects. "Collect" means data sent off the device
+that we (or anyone working for us) can access for longer than it takes to answer the request. The family's
+homeserver and `push.safechat.family` are our service, so what the app stores there counts. No analytics, crash
+reporting, advertising or third-party SDK is linked (#8), and nothing is used for tracking, so the answers are:
+
+1. **Do you or your third-party partners collect data from this app?** Yes.
+2. **Data types** (tick exactly these):
+
+   | Category | Data type | What it is in Family Chat |
+   |---|---|---|
+   | Contact Info | **Name** | the display name the child can edit in Settings |
+   | User Content | **Emails or Text Messages** | chat messages, stored on the family's homeserver |
+   | User Content | **Photos or Videos** | photos and videos sent in chats, and the avatar |
+   | User Content | **Audio Data** | voice messages |
+   | User Content | **Other User Content** | files, polls, reactions and the like |
+   | Identifiers | **User ID** | the Matrix ID (`@name:family`) |
+   | Identifiers | **Device ID** | the Matrix session (device) ID and the APNs push token sent to `push.safechat.family` |
+
+   Leave everything else unticked, in particular Location, Health, Financial, Sensitive Info, Browsing/Search
+   History, Purchases, **Contacts** (the app never reads the address book: the CI check rejects
+   `NSContactsUsageDescription`), **Usage Data** (Product Interaction, Advertising, Other Usage) and **Diagnostics** (Crash,
+   Performance, Other Diagnostic Data): nothing of that leaves the device. Email address is not collected by the app
+   (the parent signs up on the web, not here).
+3. **For each ticked type:**
+   - **Purpose:** App Functionality only. Not Analytics, Product Personalization, advertising or Other.
+   - **Linked to the user's identity?** Yes: it is stored under the child's account on the homeserver.
+   - **Used for tracking?** No.
+4. **Privacy policy URL:** the safechat.family privacy policy (required for Kids Category apps).
+
+Matrix end-to-end encryption does not change these answers: Apple has no exemption for encrypted data, and
+supervision levels and the server's E2EE settings mean we cannot promise every message is unreadable to the service.
+
+These answers must match `ElementX/SupportingFiles/PrivacyInfo.xcprivacy`; Xcode's privacy report (Organizer →
+the archive → Generate Privacy Report) shows the merged manifests of the app and its SDKs and is a good cross-check
+before every submission. If a feature starts sending something new off the device (an in-app sign-up with an email
+address, bug reports, location), update the manifest and these answers together. CI rejects any manifest that
+declares tracking, analytics, crash or diagnostic data.
+
 ## Cutting a release
 
 1. Merge everything into `familychat` and wait for **Build** to pass on the merge commit.

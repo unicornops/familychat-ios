@@ -12,7 +12,6 @@ import BackgroundTasks
 import Combine
 import Intents
 import MatrixRustSDK
-import Sentry
 import SwiftUI
 import Version
 
@@ -90,7 +89,6 @@ class AppCoordinator: AppCoordinatorProtocol, AuthenticationFlowCoordinatorDeleg
         
         targetConfiguration = Target.mainApp.configure(logLevel: appSettings.logLevel,
                                                        traceLogPacks: appSettings.traceLogPacks,
-                                                       sentryURL: appSettings.bugReportSentryRustURL,
                                                        rageshakeURL: appSettings.bugReportRageshakeURL,
                                                        appHooks: appHooks)
         
@@ -108,9 +106,8 @@ class AppCoordinator: AppCoordinatorProtocol, AuthenticationFlowCoordinatorDeleg
         
         appRouteURLParser = AppRouteURLParser(appSettings: appSettings)
         
-        let posthogAnalyticsClient = PostHogAnalyticsClient()
-        posthogAnalyticsClient.updateSuperProperties(AnalyticsEvent.SuperProperties(appPlatform: .EXI, cryptoSDK: .Rust, cryptoSDKVersion: sdkGitSha()))
-        analyticsService = AnalyticsService(client: posthogAnalyticsClient, appSettings: appSettings)
+        // Family Chat: no analytics SDK is linked (#8), so events go nowhere.
+        analyticsService = AnalyticsService(client: NoopAnalyticsClient(), appSettings: appSettings)
         
         userIndicatorController = UserIndicatorController()
         
@@ -144,8 +141,6 @@ class AppCoordinator: AppCoordinatorProtocol, AuthenticationFlowCoordinatorDeleg
                                             sdkGitSHA: sdkGitSha(),
                                             appHooks: appHooks)
         
-        Self.setupSentry(bugReportService: bugReportService, appSettings: appSettings, analytics: analyticsService)
-        
         analyticsService.startIfEnabled()
         
         windowManager.delegate = self
@@ -171,13 +166,6 @@ class AppCoordinator: AppCoordinatorProtocol, AuthenticationFlowCoordinatorDeleg
         observeAppLockChanges()
         
         registerBackgroundAppRefresh()
-        
-        appSettings.analyticsConsentStatePublisher
-            .dropFirst() // Sentry is configured during init; only reconfigure when consent state actually changes
-            .sink { [bugReportService, analyticsService, appSettings] _ in
-                Self.setupSentry(bugReportService: bugReportService, appSettings: appSettings, analytics: analyticsService)
-            }
-            .store(in: &cancellables)
         
         elementCallService.actions
             .receive(on: DispatchQueue.main)
@@ -971,84 +959,6 @@ class AppCoordinator: AppCoordinatorProtocol, AuthenticationFlowCoordinatorDeleg
             stateMachine.processEvent(.startWithExistingSession)
             hideLoadingIndicator()
         }
-    }
-    
-    private static func setupSentry(bugReportService: BugReportServiceProtocol, appSettings: AppSettings, analytics: AnalyticsServiceProtocol) {
-        guard let bugReportSentryURL = appSettings.bugReportSentryURL else { return }
-        
-        let options: Options = .init()
-        
-        #if DEBUG
-        options.enabled = false
-        #else
-        options.enabled = appSettings.analyticsConsentState == .optedIn
-        #endif
-        
-        options.dsn = bugReportSentryURL.absoluteString
-        
-        // Matches android, at least for now.
-        switch AppSettings.appBuildType {
-        case .debug:
-            options.environment = "DEBUG"
-        case .nightly:
-            options.environment = "NIGHTLY"
-        case .release:
-            options.environment = "RELEASE"
-        }
-        
-        // Sentry swizzling shows up quite often as the heaviest stack trace when profiling
-        // We don't need any of the features it powers (see docs)
-        options.enableSwizzling = false
-        
-        // WatchdogTermination is currently the top issue but we've had zero complaints
-        // so it might very well just all be false positives
-        options.enableWatchdogTerminationTracking = false
-        
-        // Disabled as it seems to report a lot of false positives
-        options.enableAppHangTracking = false
-        
-        // Most of the network requests are made Rust side, this is useless
-        options.enableNetworkBreadcrumbs = false
-        
-        // Doesn't seem to work at all well with SwiftUI
-        options.enableAutoBreadcrumbTracking = false
-        
-        // Experimental. Stitches stack traces of asynchronous code together
-        options.swiftAsyncStacktraces = true
-        
-        // Uniform sample rate: 1.0 captures 100% of transactions
-        // In Production you will probably want a smaller number such as 0.5 for 50%
-        options.sampleRate = 1.0
-        options.tracesSampleRate = 1.0
-        options.configureProfiling = { $0.sessionSampleRate = 1.0 }
-        
-        // This callback is only executed once during the entire run of the program to avoid
-        // multiple callbacks if there are multiple crash events to send (see method documentation)
-        options.onLastRunStatusDetermined = { status, event in
-            guard case .didCrash = status, let event else { return }
-            MXLog.error("Sentry detected a crash in the previous run: \(event.eventId.sentryIdString)")
-            bugReportService.lastCrashEventIDSubject.send(event.eventId.sentryIdString)
-        }
-        
-        // Mirror every crash into our own logs (which ship with rageshakes) before it's sent to Sentry.
-        // Device values are read here on the main thread; beforeSend runs on a background queue.
-        let deviceModel = UIDevice.current.model
-        let systemVersion = UIDevice.current.systemVersion
-        options.beforeSend = { @Sendable event in
-            if let crashLog = event.crashLog(deviceModel: deviceModel, systemVersion: systemVersion) {
-                MXLog.error("Sentry crash event \(event.eventId.sentryIdString):\n\(crashLog)")
-            }
-            return event
-        }
-        
-        // Any ongoing transactions will no longer be valid after calling SentrySDK.start so lets
-        // remove them and start over, otherwise the app will crash if finishTransaction is used.
-        analytics.signpost.resetTransactions()
-        
-        SentrySDK.start(options: options) // Swift
-        enableSentryLogging(enabled: options.enabled) // Rust
-        
-        MXLog.info("Sentry configured (enabled: \(options.enabled))")
     }
     
     private func processInlineReply(roomID: String, replyText: String) async {

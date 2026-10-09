@@ -128,7 +128,6 @@ struct RoomScreen: View {
                 }
             }
             .track(screen: .Room)
-            .sentryTrace("\(Self.self)")
     }
     
     private var liveLocationBanner: some View {
