@@ -85,15 +85,12 @@ targets:
         NSCameraUsageDescription: To take pictures or videos and send them as a message $(APP_DISPLAY_NAME) needs access to the camera.
         NSMicrophoneUsageDescription: To record and send messages with audio, $(APP_DISPLAY_NAME) needs to access the microphone.
         NSPhotoLibraryAddUsageDescription: This lets you save images and videos to your photo library.
-        NSLocationWhenInUseUsageDescription: Grant location access so that $(APP_DISPLAY_NAME) can share your location.
-        NSLocationAlwaysAndWhenInUseUsageDescription: To share your live location, $(APP_DISPLAY_NAME) needs location access when the app is in the background.
         NSFaceIDUsageDescription: Face ID is used to access your app.
         UIBackgroundModes: [
           audio,
           fetch,
           processing,
-          voip,
-          location
+          voip
         ]
         BGTaskSchedulerPermittedIdentifiers: [
           family.safechat.app.background.refresh
@@ -251,6 +248,8 @@ targets:
       implicit: true
       link: false
       embed: true
+    - package: ElementCall
+      product: ElementCall
     - package: PostHog
     - package: SwiftState
     - package: GZIP

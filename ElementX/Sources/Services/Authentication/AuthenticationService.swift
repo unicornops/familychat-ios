@@ -28,6 +28,9 @@ class AuthenticationService: AuthenticationServiceProtocol {
     private let appHooks: AppHooks
     
     private let homeserverSubject: CurrentValueSubject<LoginHomeserver, Never>
+    /// The currently configured homeserver.
+    ///
+    /// **Note:** The value's `accountProvider` will always be `.generic` after calling `configure(for:flow:)`.
     var homeserver: CurrentValuePublisher<LoginHomeserver, Never> {
         homeserverSubject.asCurrentValuePublisher()
     }
@@ -72,17 +75,17 @@ class AuthenticationService: AuthenticationServiceProtocol {
         }
         
         // When updating these, don't forget to update the reset method too.
-        homeserverSubject = .init(LoginHomeserver(address: appSettings.defaultServer, loginMode: .unknown))
+        homeserverSubject = .init(LoginHomeserver(accountProvider: appSettings.defaultAccountProvider, loginMode: .unknown))
         flow = .login
     }
     
     // MARK: - Public
     
-    func configure(for homeserverAddress: String, flow: AuthenticationFlow) async -> Result<Void, AuthenticationServiceError> {
+    func configure(for serverNameOrBaseURL: String, flow: AuthenticationFlow) async -> Result<Void, AuthenticationServiceError> {
         do {
-            var homeserver = LoginHomeserver(address: homeserverAddress, loginMode: .unknown)
+            var homeserver = LoginHomeserver(accountProvider: .generic(serverNameOrBaseURL), loginMode: .unknown)
             
-            let (client, clientDirectories) = try await makeClient(homeserverAddress: homeserverAddress)
+            let (client, clientDirectories) = try await makeClient(serverNameOrBaseURL: serverNameOrBaseURL)
             let loginDetails = await client.homeserverLoginDetails()
             
             homeserver.loginMode = if loginDetails.supportsOauthLogin() {
@@ -104,7 +107,7 @@ class AuthenticationService: AuthenticationServiceProtocol {
             
             adoptSessionDirectories(clientDirectories)
             self.client = client
-            clientServerName = homeserverAddress
+            clientServerName = serverNameOrBaseURL
             self.flow = flow
             homeserverSubject.send(homeserver)
             return .success(())
@@ -120,7 +123,7 @@ class AuthenticationService: AuthenticationServiceProtocol {
             return .failure(.homeserverNotAllowed)
         } catch {
             MXLog.error("Failed configuring a server: \(error)")
-            return .failure(.invalidHomeserverAddress)
+            return .failure(.invalidServerNameOrBaseURL)
         }
     }
     
@@ -223,7 +226,7 @@ class AuthenticationService: AuthenticationServiceProtocol {
         do {
             // A fresh client for the homeserver named by the link: the sign-in code needs no server selection first.
             // Built before the code is spent, so a homeserver the app can't use doesn't burn it.
-            let newClient = try await makeClient(homeserverAddress: homeserverURL.absoluteString)
+            let newClient = try await makeClient(serverNameOrBaseURL: homeserverURL.absoluteString)
             client = newClient.0
             clientDirectories = newClient.1
             unusedClientDirectories = newClient.1
@@ -299,7 +302,7 @@ class AuthenticationService: AuthenticationServiceProtocol {
                 self.client = client
                 clientServerName = homeserverURL.absoluteString
                 // The bare server name, never `https://…`: it is what the user signed in to and what gets remembered.
-                homeserverSubject.send(LoginHomeserver(address: accountProvider, loginMode: .password))
+                homeserverSubject.send(LoginHomeserver(accountProvider: .generic(accountProvider), loginMode: .password))
                 return .success(userSession)
             case .failure(let error):
                 MXLog.error("Failed setting up the sign-in code's session, discarding it.")
@@ -333,8 +336,8 @@ class AuthenticationService: AuthenticationServiceProtocol {
         
         // n.b. We rely on the SDK checking that the intent of the QR is suitable for us to login with.
         
-        // Future versions of the QR should always give us the baseUrl
-        guard let scannedServerNameOrBaseUrl = qrData.baseUrl() ?? qrData.serverName() else {
+        // Future versions of the QR should always give us the baseURL
+        guard let scannedServerNameOrBaseURL = qrData.baseUrl() ?? qrData.serverName() else {
             // With the older version of QR we treat the presence of serverName as meaning that the other device
             // is not signed in.
             MXLog.error("The QR code is from a device that is not yet signed in.")
@@ -355,7 +358,7 @@ class AuthenticationService: AuthenticationServiceProtocol {
             // The new client's stores, deleted again unless it signs in.
             var unusedClientDirectories: SessionDirectories?
             do {
-                let (client, clientDirectories) = try await makeClient(homeserverAddress: scannedServerNameOrBaseUrl)
+                let (client, clientDirectories) = try await makeClient(serverNameOrBaseURL: scannedServerNameOrBaseURL)
                 unusedClientDirectories = clientDirectories
                 let qrCodeHandler = client.newLoginWithQrCodeHandler(oauthConfiguration: appSettings.oAuthConfiguration.rustValue)
                 try await qrCodeHandler.scan(qrCodeData: qrData, progressListener: listener)
@@ -363,7 +366,7 @@ class AuthenticationService: AuthenticationServiceProtocol {
                 // Since the QR code login flow includes verification.
                 appSettings.hasRunIdentityConfirmationOnboarding = true
                 
-                switch await userSession(for: client, sessionDirectories: clientDirectories, serverName: scannedServerNameOrBaseUrl) {
+                switch await userSession(for: client, sessionDirectories: clientDirectories, serverName: scannedServerNameOrBaseURL) {
                 case .success(let userSession):
                     unusedClientDirectories = nil
                     adoptSessionDirectories(clientDirectories)
@@ -377,7 +380,7 @@ class AuthenticationService: AuthenticationServiceProtocol {
             } catch RemoteSettingsError.elementProRequired(let serverName) {
                 progressSubject.send(completion: .failure(.elementProRequired(serverName: serverName)))
             } catch HomeserverAllowlistError.notAllowed {
-                let error = QRCodeLoginError.providerNotAllowed(scannedProvider: scannedServerNameOrBaseUrl, allowedProviders: appSettings.accountProviders)
+                let error = QRCodeLoginError.providerNotAllowed(scannedProvider: scannedServerNameOrBaseURL, allowedProviders: appSettings.accountProviders.map(\.serverNameOrBaseURL))
                 progressSubject.send(completion: .failure(.qrCodeError(error)))
             } catch {
                 MXLog.error("QRCode login unknown error: \(error)")
@@ -390,7 +393,7 @@ class AuthenticationService: AuthenticationServiceProtocol {
     }
     
     func reset() {
-        homeserverSubject.send(LoginHomeserver(address: appSettings.defaultServer, loginMode: .unknown))
+        homeserverSubject.send(LoginHomeserver(accountProvider: appSettings.defaultAccountProvider, loginMode: .unknown))
         flow = .login
         client = nil
     }
@@ -406,10 +409,10 @@ class AuthenticationService: AuthenticationServiceProtocol {
     /// The client gets fresh session directories (so that caches such as server versions are always fresh for the
     /// new server), which are returned with it. They don't replace `sessionDirectories` here: the caller adopts them
     /// with `adoptSessionDirectories(_:)` once the client is accepted, or deletes them. They're deleted when this throws.
-    private func makeClient(homeserverAddress: String) async throws -> (ClientProtocol, SessionDirectories) {
+    private func makeClient(serverNameOrBaseURL: String) async throws -> (ClientProtocol, SessionDirectories) {
         let clientDirectories = SessionDirectories()
         do {
-            let client = try await clientFactory.makeAuthenticationClient(homeserverAddress: homeserverAddress,
+            let client = try await clientFactory.makeAuthenticationClient(serverNameOrBaseURL: serverNameOrBaseURL,
                                                                           sessionDirectories: clientDirectories,
                                                                           passphrase: passphrase,
                                                                           clientSessionDelegate: userSessionStore.clientSessionDelegate,
@@ -422,8 +425,8 @@ class AuthenticationService: AuthenticationServiceProtocol {
             // `smith.safechat.family` is a family on its own domain, while one delegating anywhere else is refused
             // here, before the homeserver is asked for its login flows and before any credentials exist.
             let resolvedHomeserverURL = client.homeserver()
-            guard appSettings.isAllowedHomeserver(serverName: homeserverAddress, homeserverURL: resolvedHomeserverURL) else {
-                MXLog.error("\(homeserverAddress) resolves to a homeserver outside the account providers (\(resolvedHomeserverURL)), refusing it.")
+            guard appSettings.isAllowedHomeserver(serverName: serverNameOrBaseURL, homeserverURL: resolvedHomeserverURL) else {
+                MXLog.error("\(serverNameOrBaseURL) resolves to a homeserver outside the account providers (\(resolvedHomeserverURL)), refusing it.")
                 throw HomeserverAllowlistError.notAllowed
             }
             try await appHooks.remoteSettingsHook.initializeCache(using: client, applyingTo: appSettings).get()
@@ -484,7 +487,7 @@ class AuthenticationService: AuthenticationServiceProtocol {
         MXLog.info("Checking Classic app account: \(classicAppAccount)")
         
         do {
-            let client = try await clientFactory.makeInMemoryClient(homeserverAddress: classicAppAccount.homeserverURL.absoluteString,
+            let client = try await clientFactory.makeInMemoryClient(serverNameOrBaseURL: classicAppAccount.homeserverURL.absoluteString,
                                                                     clientSessionDelegate: userSessionStore.clientSessionDelegate,
                                                                     appSettings: appSettings,
                                                                     appHooks: appHooks)

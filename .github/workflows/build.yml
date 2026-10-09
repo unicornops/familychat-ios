@@ -26,6 +26,10 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Check for third-party services
+        # Family Chat is a Kids Category app: no analytics, Element-hosted services, map tiles or location (#8).
+        run: python3 Tools/Scripts/check_third_party_services.py
+
       - name: Setup environment
         run: source ci_scripts/ci_common.sh && setup_github_actions_environment
 
@@ -56,6 +60,13 @@ jobs:
             COMPILATION_CACHE_ENABLE_CACHING=YES \
             COMPILATION_CACHE_CAS_PATH=$HOME/Library/Developer/Xcode/CompilationCache.noindex \
             | xcbeautify -q --disable-logging --is-ci --renderer github-actions
+
+      - name: Check the built app for third-party services
+        run: |
+          app=$(find ~/Library/Developer/Xcode/DerivedData -type d -path '*/Build/Products/Debug-iphonesimulator/*.app' -prune | head -n 1)
+          if [ -z "$app" ]; then echo "::error::Built app not found in DerivedData"; exit 1; fi
+          echo "Checking $app"
+          python3 Tools/Scripts/check_third_party_services.py --built-app "$app"
 
       - name: Run unit tests
         # Preview (snapshot) tests are skipped: the rebrand invalidates upstream's reference

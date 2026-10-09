@@ -137,7 +137,7 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
             await hangup()
         }
         
-        elementCallService.tearDownCallSession()
+        elementCallService.tearDownCallSession(roomID: configuration.callRoomID)
         UIDevice.current.isProximityMonitoringEnabled = false
     }
     
@@ -163,14 +163,8 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
                 configuration.elementCallBaseURL
             }
             
-            // We only set the analytics configuration if analytics are enabled
-            let analyticsConfiguration: ElementCallAnalyticsConfiguration? = if analyticsService.isEnabled {
-                .init(posthogAPIHost: appSettings.elementCallPosthogAPIHost,
-                      posthogAPIKey: appSettings.elementCallPosthogAPIKey,
-                      sentryDSN: appSettings.elementCallPosthogSentryDSN)
-            } else {
-                nil
-            }
+            // Family Chat: never give the call widget Element's PostHog and Sentry (#8).
+            let analyticsConfiguration: ElementCallAnalyticsConfiguration? = nil
             let rageshakeURL: String? = if case let .url(baseURL) = appSettings.bugReportRageshakeURL.publisher.value {
                 baseURL.absoluteString
             } else {
@@ -196,7 +190,8 @@ class CallScreenViewModel: CallScreenViewModelType, CallScreenViewModelProtocol 
             }
             
             await elementCallService.setupCallSession(roomID: configuration.roomProxy.id,
-                                                      roomDisplayName: configuration.roomProxy.infoPublisher.value.displayName ?? configuration.roomProxy.id)
+                                                      roomDisplayName: configuration.roomProxy.infoPublisher.value.displayNameOrID,
+                                                      isVideo: !configuration.voiceOnly)
         }
         
         timeoutTask = Task { [weak self] in

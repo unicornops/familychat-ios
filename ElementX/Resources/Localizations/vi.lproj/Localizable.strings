@@ -376,6 +376,7 @@
 "common_success" = "Thành công";
 "common_suggested" = "Gợi ý";
 "common_suggestions" = "Gợi ý";
+"common_switch_accounts" = "Switch accounts";
 "common_syncing" = "Đang đồng bộ";
 "common_text" = "Văn bản";
 "common_third_party_notices" = "Thông báo từ bên thứ ba";
@@ -1293,6 +1294,7 @@
 "screen_room_confirm_removal_message" = "Are you sure you wish to remove this message?";
 "screen_room_confirm_removal_reason_label" = "Reason (optional)";
 "screen_room_confirm_removal_reason_placeholder" = "Enter…";
+"screen_room_confirm_removal_reason_supporting_text" = "(Optional)";
 "screen_room_confirm_removal_title" = "Confirm removal";
 "screen_room_details_add_topic_title" = "Thêm chủ đề";
 "screen_room_details_badge_encrypted" = "Encrypted";
