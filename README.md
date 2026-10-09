@@ -194,6 +194,10 @@ unit tests. Snapshot ("preview") tests are skipped because the rebrand invalidat
 reference images; add the `record-snapshots` label to a pull request to re-record them with
 [`record-snapshots.yml`](.github/workflows/record-snapshots.yml).
 
+[`upstream-sync.yml`](.github/workflows/upstream-sync.yml) runs daily, merges each new stable upstream release on
+an `upstream/<version>` branch and opens a pull request for review, or an `upstream-sync` issue when the merge
+conflicts. See [docs/UPSTREAM-SYNC.md](docs/UPSTREAM-SYNC.md).
+
 ## Translations
 
 Upstream strings are managed with Localazy. **Localazy sync is disabled in this fork** (the
