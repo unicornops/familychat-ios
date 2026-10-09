@@ -37,7 +37,6 @@ targets:
     - package: Kingfisher
     - package: SwiftState
     - package: GZIP
-    - package: Sentry
     - package: Collections
 
     info:

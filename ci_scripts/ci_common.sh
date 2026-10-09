@@ -6,7 +6,7 @@
 set -eEu
 
 install_xcode_cloud_brew_dependencies () {
-    brew update && brew install xcodegen pkl getsentry/tools/sentry-cli
+    brew update && brew install xcodegen pkl
 }
 
 setup_github_actions_environment() {

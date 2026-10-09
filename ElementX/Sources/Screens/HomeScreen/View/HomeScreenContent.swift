@@ -7,7 +7,6 @@
 //
 
 import Compound
-import SentrySwiftUI
 import SwiftUI
 
 struct HomeScreenContent: View {
@@ -18,7 +17,6 @@ struct HomeScreenContent: View {
     
     var body: some View {
         roomList
-            .sentryTrace("\(Self.self)")
     }
     
     private var roomList: some View {

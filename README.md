@@ -37,7 +37,11 @@ endorsed by, or supported by Element.
   the password never goes to `hs` directly. Contract: `docs/client-login-links.md` in unicornops/family-chat.
 - Every link that leaves the app goes through a parental gate (see [Parental gate](#parental-gate)).
 - Push notifications go through our own gateway at `push.safechat.family`.
-- PostHog analytics, Sentry and MapTiler are disabled (no keys are shipped).
+- No analytics or crash reporting SDK is linked: PostHog (`posthog-ios`) and Sentry (`sentry-cocoa`) are removed
+  (#8). `AnalyticsService` stays, with a no-op `NoopAnalyticsClient`, so upstream's call sites merge unchanged;
+  `Signposter` keeps its API and records nothing; the Rust SDK and the call widget get no Sentry/PostHog config.
+  Rageshake (bug reports) and MapTiler stay disabled (no keys are shipped). CI (`check_third_party_services.py`)
+  fails if any of these SDKs, or a privacy manifest declaring tracking, analytics or crash data, comes back.
 - Element's commercial licence offer (`LICENSE-COMMERCIAL`), the `Enterprise` submodule and the
   Element-only CI workflows have been removed.
 
@@ -160,7 +164,13 @@ configuration keys or code paths that need a Family Chat answer.
    path we deleted show up as modify/delete conflicts: keep the deletion. Upstream's Codecov steps in the
    workflows we keep are dropped.
 7. **Dependencies:** for `matrix-rust-components-swift` and the other package versions in `project.yml`,
-   take upstream's.
+   take upstream's. Keep `PostHog` and `Sentry` out of `project.yml`, the `target.yml` files and
+   `Package.resolved` (Renovate bumps upstream make conflict there).
+8. **Analytics and crash reporting:** upstream edits to `PostHogAnalyticsClient`, `PHGPostHog*`,
+   `SentryEvent.swift` or `UploadDSYMs.swift` arrive as modify/delete conflicts: keep the deletion. In
+   `AppCoordinator` drop any `setupSentry`/`SentrySDK` code, `.sentryTrace` modifiers in views, new
+   `AnalyticsClientProtocol` requirements go into `NoopAnalyticsClient` as no-ops, and new `Signposter` API stays
+   empty. `ElementX/SupportingFiles/PrivacyInfo.xcprivacy` is ours: keep our collected data types.
 
 ### Per-merge checklist
 

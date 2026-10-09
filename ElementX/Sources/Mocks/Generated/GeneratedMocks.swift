@@ -5276,44 +5276,44 @@ nonisolated class ElementCallWidgetDriverMock: ElementCallWidgetDriverProtocol, 
 
     //MARK: - start
 
-    private let startBaseURLClientIDColorSchemeVoiceOnlyRageshakeURLAnalyticsConfigurationCallsCountLock = NSLock()
-    private nonisolated(unsafe) var startBaseURLClientIDColorSchemeVoiceOnlyRageshakeURLAnalyticsConfigurationUnderlyingCallsCount = 0
-    var startBaseURLClientIDColorSchemeVoiceOnlyRageshakeURLAnalyticsConfigurationCallsCount: Int {
-        get { startBaseURLClientIDColorSchemeVoiceOnlyRageshakeURLAnalyticsConfigurationCallsCountLock.withLock { startBaseURLClientIDColorSchemeVoiceOnlyRageshakeURLAnalyticsConfigurationUnderlyingCallsCount } }
-        set { startBaseURLClientIDColorSchemeVoiceOnlyRageshakeURLAnalyticsConfigurationCallsCountLock.withLock { startBaseURLClientIDColorSchemeVoiceOnlyRageshakeURLAnalyticsConfigurationUnderlyingCallsCount = newValue } }
+    private let startBaseURLClientIDColorSchemeVoiceOnlyRageshakeURLCallsCountLock = NSLock()
+    private nonisolated(unsafe) var startBaseURLClientIDColorSchemeVoiceOnlyRageshakeURLUnderlyingCallsCount = 0
+    var startBaseURLClientIDColorSchemeVoiceOnlyRageshakeURLCallsCount: Int {
+        get { startBaseURLClientIDColorSchemeVoiceOnlyRageshakeURLCallsCountLock.withLock { startBaseURLClientIDColorSchemeVoiceOnlyRageshakeURLUnderlyingCallsCount } }
+        set { startBaseURLClientIDColorSchemeVoiceOnlyRageshakeURLCallsCountLock.withLock { startBaseURLClientIDColorSchemeVoiceOnlyRageshakeURLUnderlyingCallsCount = newValue } }
     }
-    var startBaseURLClientIDColorSchemeVoiceOnlyRageshakeURLAnalyticsConfigurationCalled: Bool {
-        return startBaseURLClientIDColorSchemeVoiceOnlyRageshakeURLAnalyticsConfigurationCallsCount > 0
+    var startBaseURLClientIDColorSchemeVoiceOnlyRageshakeURLCalled: Bool {
+        return startBaseURLClientIDColorSchemeVoiceOnlyRageshakeURLCallsCount > 0
     }
-    private let startBaseURLClientIDColorSchemeVoiceOnlyRageshakeURLAnalyticsConfigurationReceivedArgumentsLock = NSLock()
-    private nonisolated(unsafe) var startBaseURLClientIDColorSchemeVoiceOnlyRageshakeURLAnalyticsConfigurationUnderlyingReceivedArguments: (baseURL: URL, clientID: String, colorScheme: ColorScheme, voiceOnly: Bool, rageshakeURL: String?, analyticsConfiguration: ElementCallAnalyticsConfiguration?)?
-    var startBaseURLClientIDColorSchemeVoiceOnlyRageshakeURLAnalyticsConfigurationReceivedArguments: (baseURL: URL, clientID: String, colorScheme: ColorScheme, voiceOnly: Bool, rageshakeURL: String?, analyticsConfiguration: ElementCallAnalyticsConfiguration?)? {
-        get { startBaseURLClientIDColorSchemeVoiceOnlyRageshakeURLAnalyticsConfigurationReceivedArgumentsLock.withLock { startBaseURLClientIDColorSchemeVoiceOnlyRageshakeURLAnalyticsConfigurationUnderlyingReceivedArguments } }
-        set { startBaseURLClientIDColorSchemeVoiceOnlyRageshakeURLAnalyticsConfigurationReceivedArgumentsLock.withLock { startBaseURLClientIDColorSchemeVoiceOnlyRageshakeURLAnalyticsConfigurationUnderlyingReceivedArguments = newValue } }
+    private let startBaseURLClientIDColorSchemeVoiceOnlyRageshakeURLReceivedArgumentsLock = NSLock()
+    private nonisolated(unsafe) var startBaseURLClientIDColorSchemeVoiceOnlyRageshakeURLUnderlyingReceivedArguments: (baseURL: URL, clientID: String, colorScheme: ColorScheme, voiceOnly: Bool, rageshakeURL: String?)?
+    var startBaseURLClientIDColorSchemeVoiceOnlyRageshakeURLReceivedArguments: (baseURL: URL, clientID: String, colorScheme: ColorScheme, voiceOnly: Bool, rageshakeURL: String?)? {
+        get { startBaseURLClientIDColorSchemeVoiceOnlyRageshakeURLReceivedArgumentsLock.withLock { startBaseURLClientIDColorSchemeVoiceOnlyRageshakeURLUnderlyingReceivedArguments } }
+        set { startBaseURLClientIDColorSchemeVoiceOnlyRageshakeURLReceivedArgumentsLock.withLock { startBaseURLClientIDColorSchemeVoiceOnlyRageshakeURLUnderlyingReceivedArguments = newValue } }
     }
-    private let startBaseURLClientIDColorSchemeVoiceOnlyRageshakeURLAnalyticsConfigurationReceivedInvocationsLock = NSLock()
-    private nonisolated(unsafe) var startBaseURLClientIDColorSchemeVoiceOnlyRageshakeURLAnalyticsConfigurationUnderlyingReceivedInvocations: [(baseURL: URL, clientID: String, colorScheme: ColorScheme, voiceOnly: Bool, rageshakeURL: String?, analyticsConfiguration: ElementCallAnalyticsConfiguration?)] = []
-    var startBaseURLClientIDColorSchemeVoiceOnlyRageshakeURLAnalyticsConfigurationReceivedInvocations: [(baseURL: URL, clientID: String, colorScheme: ColorScheme, voiceOnly: Bool, rageshakeURL: String?, analyticsConfiguration: ElementCallAnalyticsConfiguration?)] {
-        get { startBaseURLClientIDColorSchemeVoiceOnlyRageshakeURLAnalyticsConfigurationReceivedInvocationsLock.withLock { startBaseURLClientIDColorSchemeVoiceOnlyRageshakeURLAnalyticsConfigurationUnderlyingReceivedInvocations } }
-        set { startBaseURLClientIDColorSchemeVoiceOnlyRageshakeURLAnalyticsConfigurationReceivedInvocationsLock.withLock { startBaseURLClientIDColorSchemeVoiceOnlyRageshakeURLAnalyticsConfigurationUnderlyingReceivedInvocations = newValue } }
+    private let startBaseURLClientIDColorSchemeVoiceOnlyRageshakeURLReceivedInvocationsLock = NSLock()
+    private nonisolated(unsafe) var startBaseURLClientIDColorSchemeVoiceOnlyRageshakeURLUnderlyingReceivedInvocations: [(baseURL: URL, clientID: String, colorScheme: ColorScheme, voiceOnly: Bool, rageshakeURL: String?)] = []
+    var startBaseURLClientIDColorSchemeVoiceOnlyRageshakeURLReceivedInvocations: [(baseURL: URL, clientID: String, colorScheme: ColorScheme, voiceOnly: Bool, rageshakeURL: String?)] {
+        get { startBaseURLClientIDColorSchemeVoiceOnlyRageshakeURLReceivedInvocationsLock.withLock { startBaseURLClientIDColorSchemeVoiceOnlyRageshakeURLUnderlyingReceivedInvocations } }
+        set { startBaseURLClientIDColorSchemeVoiceOnlyRageshakeURLReceivedInvocationsLock.withLock { startBaseURLClientIDColorSchemeVoiceOnlyRageshakeURLUnderlyingReceivedInvocations = newValue } }
     }
 
-    private let startBaseURLClientIDColorSchemeVoiceOnlyRageshakeURLAnalyticsConfigurationReturnValueLock = NSLock()
-    private nonisolated(unsafe) var startBaseURLClientIDColorSchemeVoiceOnlyRageshakeURLAnalyticsConfigurationUnderlyingReturnValue: Result<URL, ElementCallWidgetDriverError>!
-    var startBaseURLClientIDColorSchemeVoiceOnlyRageshakeURLAnalyticsConfigurationReturnValue: Result<URL, ElementCallWidgetDriverError>! {
-        get { startBaseURLClientIDColorSchemeVoiceOnlyRageshakeURLAnalyticsConfigurationReturnValueLock.withLock { startBaseURLClientIDColorSchemeVoiceOnlyRageshakeURLAnalyticsConfigurationUnderlyingReturnValue } }
-        set { startBaseURLClientIDColorSchemeVoiceOnlyRageshakeURLAnalyticsConfigurationReturnValueLock.withLock { startBaseURLClientIDColorSchemeVoiceOnlyRageshakeURLAnalyticsConfigurationUnderlyingReturnValue = newValue } }
+    private let startBaseURLClientIDColorSchemeVoiceOnlyRageshakeURLReturnValueLock = NSLock()
+    private nonisolated(unsafe) var startBaseURLClientIDColorSchemeVoiceOnlyRageshakeURLUnderlyingReturnValue: Result<URL, ElementCallWidgetDriverError>!
+    var startBaseURLClientIDColorSchemeVoiceOnlyRageshakeURLReturnValue: Result<URL, ElementCallWidgetDriverError>! {
+        get { startBaseURLClientIDColorSchemeVoiceOnlyRageshakeURLReturnValueLock.withLock { startBaseURLClientIDColorSchemeVoiceOnlyRageshakeURLUnderlyingReturnValue } }
+        set { startBaseURLClientIDColorSchemeVoiceOnlyRageshakeURLReturnValueLock.withLock { startBaseURLClientIDColorSchemeVoiceOnlyRageshakeURLUnderlyingReturnValue = newValue } }
     }
-    nonisolated(unsafe) var startBaseURLClientIDColorSchemeVoiceOnlyRageshakeURLAnalyticsConfigurationClosure: ((URL, String, ColorScheme, Bool, String?, ElementCallAnalyticsConfiguration?) async -> Result<URL, ElementCallWidgetDriverError>)?
+    nonisolated(unsafe) var startBaseURLClientIDColorSchemeVoiceOnlyRageshakeURLClosure: ((URL, String, ColorScheme, Bool, String?) async -> Result<URL, ElementCallWidgetDriverError>)?
 
-    @concurrent func start(baseURL: URL, clientID: String, colorScheme: ColorScheme, voiceOnly: Bool, rageshakeURL: String?, analyticsConfiguration: ElementCallAnalyticsConfiguration?) async -> Result<URL, ElementCallWidgetDriverError> {
-        startBaseURLClientIDColorSchemeVoiceOnlyRageshakeURLAnalyticsConfigurationCallsCountLock.withLock { startBaseURLClientIDColorSchemeVoiceOnlyRageshakeURLAnalyticsConfigurationUnderlyingCallsCount += 1 }
-        startBaseURLClientIDColorSchemeVoiceOnlyRageshakeURLAnalyticsConfigurationReceivedArguments = (baseURL: baseURL, clientID: clientID, colorScheme: colorScheme, voiceOnly: voiceOnly, rageshakeURL: rageshakeURL, analyticsConfiguration: analyticsConfiguration)
-        startBaseURLClientIDColorSchemeVoiceOnlyRageshakeURLAnalyticsConfigurationReceivedInvocationsLock.withLock { startBaseURLClientIDColorSchemeVoiceOnlyRageshakeURLAnalyticsConfigurationUnderlyingReceivedInvocations.append((baseURL: baseURL, clientID: clientID, colorScheme: colorScheme, voiceOnly: voiceOnly, rageshakeURL: rageshakeURL, analyticsConfiguration: analyticsConfiguration)) }
-        if let startBaseURLClientIDColorSchemeVoiceOnlyRageshakeURLAnalyticsConfigurationClosure = startBaseURLClientIDColorSchemeVoiceOnlyRageshakeURLAnalyticsConfigurationClosure {
-            return await startBaseURLClientIDColorSchemeVoiceOnlyRageshakeURLAnalyticsConfigurationClosure(baseURL, clientID, colorScheme, voiceOnly, rageshakeURL, analyticsConfiguration)
+    @concurrent func start(baseURL: URL, clientID: String, colorScheme: ColorScheme, voiceOnly: Bool, rageshakeURL: String?) async -> Result<URL, ElementCallWidgetDriverError> {
+        startBaseURLClientIDColorSchemeVoiceOnlyRageshakeURLCallsCountLock.withLock { startBaseURLClientIDColorSchemeVoiceOnlyRageshakeURLUnderlyingCallsCount += 1 }
+        startBaseURLClientIDColorSchemeVoiceOnlyRageshakeURLReceivedArguments = (baseURL: baseURL, clientID: clientID, colorScheme: colorScheme, voiceOnly: voiceOnly, rageshakeURL: rageshakeURL)
+        startBaseURLClientIDColorSchemeVoiceOnlyRageshakeURLReceivedInvocationsLock.withLock { startBaseURLClientIDColorSchemeVoiceOnlyRageshakeURLUnderlyingReceivedInvocations.append((baseURL: baseURL, clientID: clientID, colorScheme: colorScheme, voiceOnly: voiceOnly, rageshakeURL: rageshakeURL)) }
+        if let startBaseURLClientIDColorSchemeVoiceOnlyRageshakeURLClosure = startBaseURLClientIDColorSchemeVoiceOnlyRageshakeURLClosure {
+            return await startBaseURLClientIDColorSchemeVoiceOnlyRageshakeURLClosure(baseURL, clientID, colorScheme, voiceOnly, rageshakeURL)
         } else {
-            return startBaseURLClientIDColorSchemeVoiceOnlyRageshakeURLAnalyticsConfigurationReturnValue
+            return startBaseURLClientIDColorSchemeVoiceOnlyRageshakeURLReturnValue
         }
     }
     //MARK: - handleMessage
@@ -9756,122 +9756,6 @@ nonisolated class OrientationManagerMock: OrientationManagerProtocol, @unchecked
         lockOrientationReceivedOrientation = orientation
         lockOrientationReceivedInvocationsLock.withLock { lockOrientationUnderlyingReceivedInvocations.append(orientation) }
         lockOrientationClosure?(orientation)
-    }
-}
-nonisolated class PHGPostHogMock: PHGPostHogProtocol, @unchecked Sendable {
-
-    //MARK: - optIn
-
-    private let optInCallsCountLock = NSLock()
-    private nonisolated(unsafe) var optInUnderlyingCallsCount = 0
-    var optInCallsCount: Int {
-        get { optInCallsCountLock.withLock { optInUnderlyingCallsCount } }
-        set { optInCallsCountLock.withLock { optInUnderlyingCallsCount = newValue } }
-    }
-    var optInCalled: Bool {
-        return optInCallsCount > 0
-    }
-    nonisolated(unsafe) var optInClosure: (() -> Void)?
-
-    func optIn() {
-        optInCallsCountLock.withLock { optInUnderlyingCallsCount += 1 }
-        optInClosure?()
-    }
-    //MARK: - optOut
-
-    private let optOutCallsCountLock = NSLock()
-    private nonisolated(unsafe) var optOutUnderlyingCallsCount = 0
-    var optOutCallsCount: Int {
-        get { optOutCallsCountLock.withLock { optOutUnderlyingCallsCount } }
-        set { optOutCallsCountLock.withLock { optOutUnderlyingCallsCount = newValue } }
-    }
-    var optOutCalled: Bool {
-        return optOutCallsCount > 0
-    }
-    nonisolated(unsafe) var optOutClosure: (() -> Void)?
-
-    func optOut() {
-        optOutCallsCountLock.withLock { optOutUnderlyingCallsCount += 1 }
-        optOutClosure?()
-    }
-    //MARK: - reset
-
-    private let resetCallsCountLock = NSLock()
-    private nonisolated(unsafe) var resetUnderlyingCallsCount = 0
-    var resetCallsCount: Int {
-        get { resetCallsCountLock.withLock { resetUnderlyingCallsCount } }
-        set { resetCallsCountLock.withLock { resetUnderlyingCallsCount = newValue } }
-    }
-    var resetCalled: Bool {
-        return resetCallsCount > 0
-    }
-    nonisolated(unsafe) var resetClosure: (() -> Void)?
-
-    func reset() {
-        resetCallsCountLock.withLock { resetUnderlyingCallsCount += 1 }
-        resetClosure?()
-    }
-    //MARK: - capture
-
-    private let capturePropertiesUserPropertiesCallsCountLock = NSLock()
-    private nonisolated(unsafe) var capturePropertiesUserPropertiesUnderlyingCallsCount = 0
-    var capturePropertiesUserPropertiesCallsCount: Int {
-        get { capturePropertiesUserPropertiesCallsCountLock.withLock { capturePropertiesUserPropertiesUnderlyingCallsCount } }
-        set { capturePropertiesUserPropertiesCallsCountLock.withLock { capturePropertiesUserPropertiesUnderlyingCallsCount = newValue } }
-    }
-    var capturePropertiesUserPropertiesCalled: Bool {
-        return capturePropertiesUserPropertiesCallsCount > 0
-    }
-    private let capturePropertiesUserPropertiesReceivedArgumentsLock = NSLock()
-    private nonisolated(unsafe) var capturePropertiesUserPropertiesUnderlyingReceivedArguments: (event: String, properties: [String: Any]?, userProperties: [String: Any]?)?
-    var capturePropertiesUserPropertiesReceivedArguments: (event: String, properties: [String: Any]?, userProperties: [String: Any]?)? {
-        get { capturePropertiesUserPropertiesReceivedArgumentsLock.withLock { capturePropertiesUserPropertiesUnderlyingReceivedArguments } }
-        set { capturePropertiesUserPropertiesReceivedArgumentsLock.withLock { capturePropertiesUserPropertiesUnderlyingReceivedArguments = newValue } }
-    }
-    private let capturePropertiesUserPropertiesReceivedInvocationsLock = NSLock()
-    private nonisolated(unsafe) var capturePropertiesUserPropertiesUnderlyingReceivedInvocations: [(event: String, properties: [String: Any]?, userProperties: [String: Any]?)] = []
-    var capturePropertiesUserPropertiesReceivedInvocations: [(event: String, properties: [String: Any]?, userProperties: [String: Any]?)] {
-        get { capturePropertiesUserPropertiesReceivedInvocationsLock.withLock { capturePropertiesUserPropertiesUnderlyingReceivedInvocations } }
-        set { capturePropertiesUserPropertiesReceivedInvocationsLock.withLock { capturePropertiesUserPropertiesUnderlyingReceivedInvocations = newValue } }
-    }
-    nonisolated(unsafe) var capturePropertiesUserPropertiesClosure: ((String, [String: Any]?, [String: Any]?) -> Void)?
-
-    func capture(_ event: String, properties: [String: Any]?, userProperties: [String: Any]?) {
-        capturePropertiesUserPropertiesCallsCountLock.withLock { capturePropertiesUserPropertiesUnderlyingCallsCount += 1 }
-        capturePropertiesUserPropertiesReceivedArguments = (event: event, properties: properties, userProperties: userProperties)
-        capturePropertiesUserPropertiesReceivedInvocationsLock.withLock { capturePropertiesUserPropertiesUnderlyingReceivedInvocations.append((event: event, properties: properties, userProperties: userProperties)) }
-        capturePropertiesUserPropertiesClosure?(event, properties, userProperties)
-    }
-    //MARK: - screen
-
-    private let screenPropertiesCallsCountLock = NSLock()
-    private nonisolated(unsafe) var screenPropertiesUnderlyingCallsCount = 0
-    var screenPropertiesCallsCount: Int {
-        get { screenPropertiesCallsCountLock.withLock { screenPropertiesUnderlyingCallsCount } }
-        set { screenPropertiesCallsCountLock.withLock { screenPropertiesUnderlyingCallsCount = newValue } }
-    }
-    var screenPropertiesCalled: Bool {
-        return screenPropertiesCallsCount > 0
-    }
-    private let screenPropertiesReceivedArgumentsLock = NSLock()
-    private nonisolated(unsafe) var screenPropertiesUnderlyingReceivedArguments: (screenTitle: String, properties: [String: Any]?)?
-    var screenPropertiesReceivedArguments: (screenTitle: String, properties: [String: Any]?)? {
-        get { screenPropertiesReceivedArgumentsLock.withLock { screenPropertiesUnderlyingReceivedArguments } }
-        set { screenPropertiesReceivedArgumentsLock.withLock { screenPropertiesUnderlyingReceivedArguments = newValue } }
-    }
-    private let screenPropertiesReceivedInvocationsLock = NSLock()
-    private nonisolated(unsafe) var screenPropertiesUnderlyingReceivedInvocations: [(screenTitle: String, properties: [String: Any]?)] = []
-    var screenPropertiesReceivedInvocations: [(screenTitle: String, properties: [String: Any]?)] {
-        get { screenPropertiesReceivedInvocationsLock.withLock { screenPropertiesUnderlyingReceivedInvocations } }
-        set { screenPropertiesReceivedInvocationsLock.withLock { screenPropertiesUnderlyingReceivedInvocations = newValue } }
-    }
-    nonisolated(unsafe) var screenPropertiesClosure: ((String, [String: Any]?) -> Void)?
-
-    func screen(_ screenTitle: String, properties: [String: Any]?) {
-        screenPropertiesCallsCountLock.withLock { screenPropertiesUnderlyingCallsCount += 1 }
-        screenPropertiesReceivedArguments = (screenTitle: screenTitle, properties: properties)
-        screenPropertiesReceivedInvocationsLock.withLock { screenPropertiesUnderlyingReceivedInvocations.append((screenTitle: screenTitle, properties: properties)) }
-        screenPropertiesClosure?(screenTitle, properties)
     }
 }
 nonisolated class PhotoLibraryManagerMock: PhotoLibraryManagerProtocol, @unchecked Sendable {

@@ -9,7 +9,6 @@
 import Combine
 import Foundation
 import GZIP
-import Sentry
 import UIKit
 
 class BugReportService: NSObject, BugReportServiceProtocol {
@@ -77,8 +76,8 @@ class BugReportService: NSObject, BugReportServiceProtocol {
             params.append(.init(key: "device_keys", type: .text(value: compactKeys)))
         }
         
-        if let crashEventID = lastCrashEventIDSubject.value {
-            params.append(MultipartFormData(key: "crash_report", type: .text(value: "<https://sentry.tools.element.io/organizations/element/issues/?project=44&query=\(crashEventID)>")))
+        // Family Chat: no crash reporter is linked (#8), so there is never a crash event to link.
+        if lastCrashEventIDSubject.value != nil {
             bugReport.githubLabels.append("crash")
         }
         

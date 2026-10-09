@@ -35,7 +35,6 @@ class ShareExtensionViewController: UIViewController {
         if Self.targetConfiguration == nil {
             Self.targetConfiguration = Target.shareExtension.configure(logLevel: appSettings.logLevel,
                                                                        traceLogPacks: appSettings.traceLogPacks,
-                                                                       sentryURL: nil,
                                                                        rageshakeURL: appSettings.bugReportRageshakeURL,
                                                                        appHooks: appHooks)
         }

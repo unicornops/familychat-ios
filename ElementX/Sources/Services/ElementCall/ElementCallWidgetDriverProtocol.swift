@@ -34,16 +34,9 @@ protocol ElementCallWidgetDriverProtocol {
                clientID: String,
                colorScheme: ColorScheme,
                voiceOnly: Bool,
-               rageshakeURL: String?,
-               analyticsConfiguration: ElementCallAnalyticsConfiguration?) async -> Result<URL, ElementCallWidgetDriverError>
+               rageshakeURL: String?) async -> Result<URL, ElementCallWidgetDriverError>
     
     /// Passes a message from the Widget to the SDK to handle, returning a Bool that represents whether or not the widget driver is still running.
     @discardableResult
     func handleMessage(_ message: String) async -> Result<Bool, ElementCallWidgetDriverError>
-}
-
-struct ElementCallAnalyticsConfiguration {
-    let posthogAPIHost: String
-    let posthogAPIKey: String
-    let sentryDSN: String
 }

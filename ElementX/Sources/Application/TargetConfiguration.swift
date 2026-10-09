@@ -41,24 +41,18 @@ nonisolated enum Target: String {
     ///   b) automatically reconfigure the platform as necessary.
     func configure(logLevel: LogLevel,
                    traceLogPacks: Set<TraceLogPack>,
-                   sentryURL: URL?,
                    rageshakeURL: RemotePreference<RageshakeConfiguration>,
                    appHooks: AppHooks) -> ConfigurationResult {
         let tracingConfiguration = Tracing.buildConfiguration(logLevel: logLevel,
                                                               traceLogPacks: traceLogPacks,
                                                               currentTarget: rawValue,
-                                                              filePrefix: logFilePrefix,
-                                                              sentryURL: sentryURL)
+                                                              filePrefix: logFilePrefix)
         
         do {
             try initPlatform(config: tracingConfiguration, useLightweightTokioRuntime: useLightweightTokioRuntime)
         } catch {
             fatalError("Failed configuring target \(self) with error: \(error)")
         }
-        
-        // Setup sentry above but disable it by default. It will be started
-        // later together with the analytics service if the user consents.
-        enableSentryLogging(enabled: false)
         
         MXLog.configure(currentTarget: rawValue)
         
@@ -70,7 +64,7 @@ nonisolated enum Target: String {
         return ConfigurationResult(hookCancellable: hookCancellable)
     }
     
-    /// The result of calling ``configure(logLevel:traceLogPacks:sentryURL:)``.
+    /// The result of calling ``configure(logLevel:traceLogPacks:rageshakeURL:appHooks:)``.
     /// This must be stored - see the docs on the configure method to learn more.
     struct ConfigurationResult {
         private let hookCancellable: AnyCancellable

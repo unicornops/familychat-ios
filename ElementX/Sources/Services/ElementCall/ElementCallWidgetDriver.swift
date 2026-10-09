@@ -72,8 +72,7 @@ final class ElementCallWidgetDriver: WidgetCapabilitiesProvider, ElementCallWidg
                clientID: String,
                colorScheme: ColorScheme,
                voiceOnly: Bool,
-               rageshakeURL: String?,
-               analyticsConfiguration: ElementCallAnalyticsConfiguration?) async -> Result<URL, ElementCallWidgetDriverError> {
+               rageshakeURL: String?) async -> Result<URL, ElementCallWidgetDriverError> {
         guard let room = room as? Room else {
             return .failure(.roomInvalid)
         }
@@ -89,11 +88,12 @@ final class ElementCallWidgetDriver: WidgetCapabilitiesProvider, ElementCallWidg
                                                                                 fontScale: nil,
                                                                                 font: nil,
                                                                                 encryption: useEncryption ? .perParticipantKeys : .unencrypted,
+                                                                                // Family Chat: the call widget never gets analytics or crash reporting (#8).
                                                                                 posthogUserId: nil,
-                                                                                posthogApiHost: analyticsConfiguration?.posthogAPIHost,
-                                                                                posthogApiKey: analyticsConfiguration?.posthogAPIKey,
+                                                                                posthogApiHost: nil,
+                                                                                posthogApiKey: nil,
                                                                                 rageshakeSubmitUrl: rageshakeURL,
-                                                                                sentryDsn: analyticsConfiguration?.sentryDSN,
+                                                                                sentryDsn: nil,
                                                                                 
                                                                                 sentryEnvironment: nil),
                                                                    config: .init(intent: intent))

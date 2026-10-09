@@ -26,7 +26,6 @@ class UnitTestsAppCoordinator: AppCoordinatorProtocol {
         try? FileManager.default.removeItem(at: .appGroupLogsDirectory)
         targetConfiguration = Target.tests.configure(logLevel: .info,
                                                      traceLogPacks: [],
-                                                     sentryURL: nil,
                                                      rageshakeURL: Self.targetRageshakeURL,
                                                      appHooks: Self.targetAppHooks)
     }

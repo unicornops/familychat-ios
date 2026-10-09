@@ -59,8 +59,6 @@ ALLOWED = {
         "preview only, never opened",
     ("ElementX/Sources/Screens/Spaces/SpaceScreen/View/SpaceScreen.swift", "#engineering-team:element.io"):
         "preview room alias, not a URL",
-    ("ElementX/Sources/Services/BugReport/BugReportService.swift", "https://sentry.tools.element.io/organizations"):
-        "a link written into a bug report, and bug reports are disabled (no rageshake URL in Secrets.swift)",
     ("ElementX/SupportingFiles/Settings.bundle/Packages/maplibre-gl-native-distribution.plist", "MapTiler.com"):
         "licence text in the acknowledgements",
 }
@@ -91,24 +89,44 @@ FORBIDDEN_INFO_PLIST_KEYS = [
     "NSSpeechRecognitionUsageDescription",
 ]
 FORBIDDEN_BACKGROUND_MODES = ["location"]
-FORBIDDEN_PRIVACY_DATA_TYPES = ["NSPrivacyCollectedDataTypePreciseLocation", "NSPrivacyCollectedDataTypeCoarseLocation"]
+# Data types no manifest in the app may declare: location (turned off), and the analytics, crash reporting,
+# diagnostics and advertising data that only an analytics or crash SDK collects. The app ships none (#8).
+FORBIDDEN_PRIVACY_DATA_TYPES = [
+    "NSPrivacyCollectedDataTypePreciseLocation",
+    "NSPrivacyCollectedDataTypeCoarseLocation",
+    "NSPrivacyCollectedDataTypeCrashData",
+    "NSPrivacyCollectedDataTypePerformanceData",
+    "NSPrivacyCollectedDataTypeOtherDiagnosticData",
+    "NSPrivacyCollectedDataTypeProductInteraction",
+    "NSPrivacyCollectedDataTypeOtherUsageData",
+    "NSPrivacyCollectedDataTypeAdvertisingData",
+    "NSPrivacyCollectedDataTypeSearchHistory",
+    "NSPrivacyCollectedDataTypeBrowsingHistory",
+]
+# Purposes no declared data type may have. Everything the app collects is for app functionality only.
+FORBIDDEN_PRIVACY_PURPOSES = [
+    "NSPrivacyCollectedDataTypePurposeAnalytics",
+    "NSPrivacyCollectedDataTypePurposeThirdPartyAdvertising",
+    "NSPrivacyCollectedDataTypePurposeDeveloperAdvertising",
+    "NSPrivacyCollectedDataTypePurposeProductPersonalization",
+    "NSPrivacyCollectedDataTypePurposeOther",
+]
 INFO_PLISTS = ["ElementX/SupportingFiles/Info.plist", "NSE/SupportingFiles/Info.plist", "ShareExtension/SupportingFiles/Info.plist"]
 TARGET_YMLS = ["ElementX/SupportingFiles/target.yml", "NSE/SupportingFiles/target.yml", "ShareExtension/SupportingFiles/target.yml"]
-PRIVACY_MANIFESTS = ["ElementX/SupportingFiles/PrivacyInfo.xcprivacy", "NSE/SupportingFiles/PrivacyInfo.xcprivacy"]
+PRIVACY_MANIFESTS = [
+    "ElementX/SupportingFiles/PrivacyInfo.xcprivacy",
+    "NSE/SupportingFiles/PrivacyInfo.xcprivacy",
+    "ShareExtension/SupportingFiles/PrivacyInfo.xcprivacy",
+]
 
 # Analytics, advertising, attribution, crash and support SDKs, matched against package URLs.
 FORBIDDEN_PACKAGES = re.compile(
     r"firebase|googleappmeasurement|google-?mobile-?ads|googleanalytics|amplitude|mixpanel|appsflyer|adjust|facebook"
     r"|segmentio|analytics-swift|datadog|dd-sdk|bugsnag|crashlytics|instabug|giphy|tenor|klipy|onesignal|branch-sdk"
     r"|braze|appcenter|newrelic|embrace|smartlook|fullstory|logrocket|countly|matomo|flurry|kochava|airship"
-    r"|intercom|zendesk|hotjar|uxcam|mapbox",
+    r"|intercom|zendesk|hotjar|uxcam|mapbox|posthog|sentry|plcrashreporter|kscrash",
     re.IGNORECASE,
 )
-# Linked but inert (no key, never started). Remove them, then this list (familychat-ios#8).
-PENDING_REMOVAL_PACKAGES = {
-    "posthog-ios": "PostHog: no host/key in Secrets.swift, AnalyticsService never starts",
-    "sentry-cocoa": "Sentry: no DSN in Secrets.swift, SentrySDK.start is never called",
-}
 PACKAGE_FILES = ["project.yml", "ElementX.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved"]
 
 errors = []
@@ -233,10 +251,18 @@ def check_privacy_manifest(path, bundled=False):
         errors.append(f"{name}: NSPrivacyTracking is true")
     if manifest.get("NSPrivacyTrackingDomains"):
         errors.append(f"{name}: NSPrivacyTrackingDomains {manifest['NSPrivacyTrackingDomains']}")
-    collected = [entry.get("NSPrivacyCollectedDataType") for entry in manifest.get("NSPrivacyCollectedDataTypes", [])]
+    entries = manifest.get("NSPrivacyCollectedDataTypes", [])
+    collected = [entry.get("NSPrivacyCollectedDataType") for entry in entries]
     for data_type in FORBIDDEN_PRIVACY_DATA_TYPES:
         if data_type in collected:
-            errors.append(f"{name}: declares {data_type}")
+            errors.append(f"{name}: declares {data_type} (no analytics, crash reporting or location, #8)")
+    for entry in entries:
+        data_type = entry.get("NSPrivacyCollectedDataType")
+        if entry.get("NSPrivacyCollectedDataTypeTracking"):
+            errors.append(f"{name}: {data_type} is used for tracking")
+        for purpose in entry.get("NSPrivacyCollectedDataTypePurposes", []):
+            if purpose in FORBIDDEN_PRIVACY_PURPOSES:
+                errors.append(f"{name}: {data_type} has purpose {purpose}")
     if bundled and collected:
         # Feeds the App Store privacy labels; SDK manifests are listed so nothing is missed.
         print(f"ℹ️  {name} declares: {', '.join(sorted(filter(None, collected)))}")
@@ -251,11 +277,7 @@ def check_packages():
         else:
             urls = re.findall(r"url:\s*(\S+)", text)
         for url in urls:
-            identity = url.rstrip("/").removesuffix(".git").rsplit("/", 1)[-1].lower()
-            if identity in PENDING_REMOVAL_PACKAGES:
-                if path.suffix != ".resolved":
-                    warnings.append(f"{name}: {url} is still linked. {PENDING_REMOVAL_PACKAGES[identity]}")
-            elif FORBIDDEN_PACKAGES.search(url):
+            if FORBIDDEN_PACKAGES.search(url):
                 errors.append(f"{name}: forbidden SDK {url}")
 
 
@@ -268,9 +290,9 @@ def check_built_app(app):
         check_info_plist(bundle / "Info.plist")
     for manifest in sorted(app.rglob("PrivacyInfo.xcprivacy")):
         check_privacy_manifest(manifest, bundled=True)
-    for framework in sorted(app.rglob("*.framework")):
+    for framework in sorted([*app.rglob("*.framework"), *app.rglob("*.bundle")]):
         if FORBIDDEN_PACKAGES.search(framework.name):
-            errors.append(f"{display(framework)}: forbidden SDK framework")
+            errors.append(f"{display(framework)}: forbidden SDK framework or resource bundle")
 
 
 def display(path):
