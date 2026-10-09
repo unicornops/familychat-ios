@@ -80,10 +80,10 @@ reporting, advertising or third-party SDK is linked (#8), and nothing is used fo
    | User Content | **Other User Content** | files, polls, reactions and the like |
    | Identifiers | **User ID** | the Matrix ID (`@name:family`) |
    | Identifiers | **Device ID** | the Matrix session (device) ID and the APNs push token sent to `push.safechat.family` |
-   | Contacts | **Contacts** | who the child chats with (room and DM membership, a social graph); the address book is never read |
 
    Leave everything else unticked, in particular Location, Health, Financial, Sensitive Info, Browsing/Search
-   History, Purchases, **Usage Data** (Product Interaction, Advertising, Other Usage) and **Diagnostics** (Crash,
+   History, Purchases, **Contacts** (the app never reads the address book: the CI check rejects
+   `NSContactsUsageDescription`), **Usage Data** (Product Interaction, Advertising, Other Usage) and **Diagnostics** (Crash,
    Performance, Other Diagnostic Data): nothing of that leaves the device. Email address is not collected by the app
    (the parent signs up on the web, not here).
 3. **For each ticked type:**
