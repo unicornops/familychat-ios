@@ -41,6 +41,10 @@ class LiveLocationManager: NSObject, LiveLocationManagerProtocol, CLLocationMana
     
     private var lastLocation: CLLocationCoordinate2D?
     
+    private static var hasLocationBackgroundMode: Bool {
+        (Bundle.main.object(forInfoDictionaryKey: "UIBackgroundModes") as? [String])?.contains("location") == true
+    }
+    
     init(clientProxy: ClientProxyProtocol,
          appSettings: AppSettings,
          locationManager: @autoclosure @MainActor () -> CLLocationManagerProtocol = CLLocationManager()) {
@@ -56,7 +60,10 @@ class LiveLocationManager: NSObject, LiveLocationManagerProtocol, CLLocationMana
         
         // Configure CLLocationManager for continuous background tracking.
         self.locationManager.delegate = self
-        self.locationManager.allowsBackgroundLocationUpdates = true
+        // Family Chat: no `location` background mode (#8), and CoreLocation throws on this without one.
+        if Self.hasLocationBackgroundMode {
+            self.locationManager.allowsBackgroundLocationUpdates = true
+        }
         self.locationManager.showsBackgroundLocationIndicator = true
         
         // Since unpausing location updates is not trivial, let's always keep the location updates running
