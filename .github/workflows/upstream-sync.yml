@@ -52,6 +52,12 @@ jobs:
         with:
           app-id: ${{ secrets.UPSTREAM_APP_ID }}
           private-key: ${{ secrets.UPSTREAM_APP_PRIVATE_KEY }}
+          # Scope the minted token to what the sync does; a bare installation token would inherit
+          # all the app's permissions.
+          permissions: >-
+            contents: write
+            pull_requests: write
+            issues: write
 
       - name: Merge and open a pull request or an issue
         env:
